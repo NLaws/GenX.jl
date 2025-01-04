@@ -114,7 +114,7 @@ function hydro_res!(EP::Model, inputs::Dict, setup::Dict)
             sum(derating_factor(gen[y], tag = res) * EP[:vP][y, t] for y in HYDRO_RES)
         )
         add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceHydro)
-    elseif CapacityReserveMargin == 2
+    elseif setup["CapacityReserveMargin"] == 2
         @expression(EP,
             eCapResMarBalanceHydro[res = 1:inputs["NCapacityReserveMargin"], t = 1:1],
             sum(
