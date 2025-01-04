@@ -3,8 +3,7 @@ module TestCapacityReserveMargin2
 using Test
 include(joinpath(@__DIR__, "utilities.jl"))
 
-
-test_path = joinpath(@__DIR__,  "three_zones_capacity_reserve")
+test_path = joinpath(@__DIR__, "three_zones_capacity_reserve")
 
 genx_setup = Dict(
     "CapacityReserveMargin" => 2
