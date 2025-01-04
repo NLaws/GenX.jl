@@ -74,7 +74,7 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
 
     # if input files are present, add capacity reserve margin slack variables
     if haskey(inputs, "dfCapRes_slack")
-        @variable(EP, vCapResSlack[res = 1:NCRM, t = 1:T] >= 0)
+        @variable(EP, vCapResSlack[res = 1:NCRM, t = 1:T]>=0)
         add_similar_to_expression!(EP[:eCapResMarBalance], vCapResSlack)
 
         @expression(EP,
