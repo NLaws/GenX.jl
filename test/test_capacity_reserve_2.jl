@@ -15,7 +15,7 @@ end
 
 max_demand_by_zone = maximum(inputs["pD"], dims=1)
 
-min_cap_reserve = sum(d * (1+c) for (d,c) in zip(max_demand_by_zone, inputs["dfCapRes"]))
+min_cap_reserve = sum(d * (1 + c) for (d, c) in zip(max_demand_by_zone, inputs["dfCapRes"]))
 
 @test value.(EP[:eCapResMarBalance])[1] >= min_cap_reserve
 
