@@ -816,14 +816,12 @@ function cluster_inputs(
         end
     end
 
-
     # Remove Constant Columns - Add back later in final output by repeating the first value in
     # ConstData in every reduced time step
     all_profiles, all_col_names, ConstData, ConstCols = remove_constant_columns(
         all_profiles,
         all_col_names,
         v)
-        
     if length(all_profiles) == 0
         throw(@error(
             "Time domain reduction is not implemented for time series that are all constant."
