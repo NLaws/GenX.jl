@@ -21,9 +21,9 @@ function add_known_price_market_model!(EP::Model, inputs::Dict, setup::Dict)
         if Z != 1
             throw(ErrorException("The market model is only implemented for single zone models."))
         end
-        if setup["TimeDomainReduction"] == 1
-            throw(ErrorException("TimeDomainReduction is not supported in the market model."))
-        end
+        # if setup["TimeDomainReduction"] == 1
+        #     throw(ErrorException("TimeDomainReduction is not supported in the market model."))
+        # end
 
         M = length(inputs[MARKET_LIMITS])  # number of market price tiers
 
