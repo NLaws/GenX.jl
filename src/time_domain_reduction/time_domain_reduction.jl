@@ -39,12 +39,12 @@ function rmse_score(y_true, y_pred)
 end
 
 @doc raw"""
-    parse_data(myinputs)
+    parse_data(myinputs:Dict)
 
-Get demand, solar, wind, and other curves from the input data.
+Get demand, solar, wind, and other curves from the input data created by load_inputs.
 
 """
-function parse_data(myinputs)
+function parse_data(myinputs::Dict)
     # Assumes no missing data
     RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
     ZONES = myinputs["R_ZONES"]
@@ -53,7 +53,6 @@ function parse_data(myinputs)
     demand_profiles = [myinputs["pD"][:, l] for l in 1:size(myinputs["pD"], 2)]
     demand_col_names = [DEMAND_COLUMN_PREFIX() * string(l)
                         for l in 1:size(demand_profiles)[1]]
-    demand_zones = [l for l in 1:size(demand_profiles)[1]]
     col_to_zone_map = Dict(demand_col_names .=> 1:length(demand_col_names))
 
     # CAPACITY FACTORS - Generators_variability.csv
@@ -133,7 +132,6 @@ function parse_multi_stage_data(inputs_dict)
     demand_profiles = [reduce(vcat, vector_lps[l]) for l in 1:size(inputs_dict[1]["pD"], 2)]
     demand_col_names = [DEMAND_COLUMN_PREFIX() * string(l)
                         for l in 1:size(demand_profiles)[1]]
-    demand_zones = [l for l in 1:size(demand_profiles)[1]]
     col_to_zone_map = Dict(demand_col_names .=> 1:length(demand_col_names))
 
     # CAPACITY FACTORS - Generators_variability.csv
@@ -300,12 +298,12 @@ function cluster(ClusterMethod,
 end
 
 @doc raw"""
-    RemoveConstCols(all_profiles, all_col_names)
+    remove_constant_columns(all_profiles, all_col_names)
 
 Remove and store the columns that do not vary during the period.
 
 """
-function RemoveConstCols(all_profiles, all_col_names, v = false)
+function remove_constant_columns(all_profiles, all_col_names, v = false)
     ConstData = []
     ConstIdx = []
     ConstCols = []
@@ -322,7 +320,7 @@ function RemoveConstCols(all_profiles, all_col_names, v = false)
     end
     all_profiles = [all_profiles[i] for i in 1:length(all_profiles) if i ∉ ConstIdx]
     all_col_names = [all_col_names[i] for i in 1:length(all_col_names) if i ∉ ConstIdx]
-    return all_profiles, all_col_names, ConstData, ConstCols, ConstIdx
+    return all_profiles, all_col_names, ConstData, ConstCols
 end
 
 @doc raw"""
@@ -409,7 +407,7 @@ function get_integral_extreme(GDF, statKey, col_names, ConstCols)
         (stat, stat_idx) = findmin(sum([GDF[!, Symbol(c)]
                                         for c in setdiff(col_names, ConstCols)]))
     else
-        println("Error: Statistic Key ", statKey, " is invalid. Choose `Max' or `Min'.")
+        throw(@error("Statistic Key $statKey is invalid. Choose `Max' or `Min'."))
     end
     return (stat, stat_idx)
 end
@@ -431,7 +429,7 @@ function get_absolute_extreme(DF, statKey, col_names, ConstCols)
                                         for c in setdiff(col_names, ConstCols)]))
         group_idx = DF.Group[stat_idx]
     else
-        println("Error: Statistic Key ", statKey, " is invalid. Choose `Max' or `Min'.")
+        throw(@error("Statistic Key $statKey is invalid. Choose `Max' or `Min'."))
     end
     return (stat, group_idx)
 end
@@ -695,7 +693,6 @@ function cluster_inputs(inpath,
     mysetup_MS["ParameterScale"] = 0
 
     if MultiStage == 1
-        model_dict = Dict()
         inputs_dict = Dict()
         for t in 1:NumStages
 
@@ -763,11 +760,22 @@ function cluster_inputs(inpath,
         println()
     end
 
-    # Remove Constant Columns - Add back later in final output
-    all_profiles, all_col_names, ConstData, ConstCols, ConstIdx = RemoveConstCols(
+    # Remove Constant Columns - Add back later in final output by repeating the first value in
+    # ConstData in every reduced time step
+    all_profiles, all_col_names, ConstData, ConstCols = remove_constant_columns(
         all_profiles,
         all_col_names,
         v)
+    if length(all_profiles) == 0
+        throw(@error(
+            "Time domain reduction is not implemented for time series that are all constant."
+        ))
+    end
+    if !(all(c in all_col_names for c in demand_col_names))
+        throw(@error(
+            "Time domain reduction is not implemented for constant demand profiles."
+        ))
+    end
 
     # Determine whether or not to time domain reduce fuel profiles as well based on user choice and file structure (i.e., variable fuels in Fuels_data.csv)
     IncludeFuel = true
@@ -776,8 +784,9 @@ function cluster_inputs(inpath,
     end
 
     # Put it together!
-    InputData = DataFrame(Dict(all_col_names[c] => all_profiles[c]
-    for c in 1:length(all_col_names)))
+    InputData = DataFrame(Dict(
+        all_col_names[c] => all_profiles[c] for c in 1:length(all_col_names)
+    ))
     InputData = convert.(Float64, InputData)
     if v
         println("Demand (MW) and Capacity Factor Profiles: ")
@@ -815,14 +824,14 @@ function cluster_inputs(inpath,
     end
 
     # Compile newly normalized/standardized profiles
-    AnnualTSeriesNormalized = DataFrame(Dict(OldColNames[c] => normProfiles[c]
-    for c in 1:length(OldColNames)))
+    AnnualTSeriesNormalized = DataFrame(Dict(
+        OldColNames[c] => normProfiles[c] for c in 1:length(OldColNames)
+    ))
 
     # Optional pre-scaling of demand in order to give it more preference in clutering algorithm
     if DemandWeight != 1   # If we want to value demand more/less than capacity factors. Assume nonnegative. LW=1 means no scaling.
         for c in demand_col_names
-            AnnualTSeriesNormalized[!, Symbol(c)] .= AnnualTSeriesNormalized[!,
-                Symbol(c)] .* DemandWeight
+            AnnualTSeriesNormalized[!, Symbol(c)] .= AnnualTSeriesNormalized[!, Symbol(c)] .* DemandWeight
         end
     end
 
@@ -835,15 +844,16 @@ function cluster_inputs(inpath,
     ##### STEP 2: Identify extreme periods in the model, Reshape data for clustering
 
     # Total number of subperiods available in the dataset, where each subperiod length = TimestepsPerRepPeriod
-    NumDataPoints = Nhours ÷ TimestepsPerRepPeriod # 364 weeks in 7 years
+    NumSubPeriods = Nhours ÷ TimestepsPerRepPeriod # 364 weeks in 7 years
     if v
-        println("Total Subperiods in the data set: ", NumDataPoints)
+        println("Total Subperiods in the data set: ", NumSubPeriods)
     end
-    InputData[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1    # Group col identifies the subperiod ID of each hour (e.g., all hours in week 2 have Group=2 if using TimestepsPerRepPeriod=168)
+    # Group col identifies the subperiod ID of each hour (e.g., all hours in week 2 have Group=2 if using TimestepsPerRepPeriod=168)
+    InputData[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1    
 
     # Group by period (e.g., week)
     cgdf = combine(groupby(InputData, :Group), [c .=> sum for c in OldColNames])
-    cgdf = cgdf[setdiff(1:end, NumDataPoints + 1), :]
+    cgdf = cgdf[setdiff(1:end, NumSubPeriods + 1), :]
     rename!(cgdf, [:Group; Symbol.(OldColNames)])
 
     # Extreme period identification based on user selection in time_domain_reduction_settings.yml
@@ -940,21 +950,20 @@ function cluster_inputs(inpath,
     ### DATA MODIFICATION - Shifting InputData and Normalized InputData
     #    from 8760 (# hours) by n (# profiles) DF to
     #    168*n (n period-stacked profiles) by 52 (# periods) DF
-    DFsToConcat = [stack(InputData[isequal.(InputData.Group, w), :], OldColNames)[!,
-                       :value] for w in 1:NumDataPoints if w <= NumDataPoints]
-    ModifiedData = DataFrame(Dict(Symbol(i) => DFsToConcat[i] for i in 1:NumDataPoints))
+    DFsToConcat = [
+        stack(InputData[isequal.(InputData.Group, w), :], OldColNames)[!,:value] 
+        for w in 1:NumSubPeriods
+    ]
+    ModifiedData = DataFrame(Dict(Symbol(i) => DFsToConcat[i] for i in 1:NumSubPeriods))
 
-    AnnualTSeriesNormalized[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+
-                                          1
-    DFsToConcatNorm = [stack(
-                           AnnualTSeriesNormalized[
-                               isequal.(AnnualTSeriesNormalized.Group,
-                                   w),
-                               :],
-                           OldColNames)[!,
-                           :value] for w in 1:NumDataPoints if w <= NumDataPoints]
-    ModifiedDataNormalized = DataFrame(Dict(Symbol(i) => DFsToConcatNorm[i]
-    for i in 1:NumDataPoints))
+    AnnualTSeriesNormalized[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1
+    DFsToConcatNorm = [
+        stack(AnnualTSeriesNormalized[isequal.(AnnualTSeriesNormalized.Group, w), :], OldColNames)[!,:value] 
+        for w in 1:NumSubPeriods
+    ]
+    ModifiedDataNormalized = DataFrame(
+        Dict(Symbol(i) => DFsToConcatNorm[i] for i in 1:NumSubPeriods)
+    )
 
     # Remove extreme periods from normalized data before clustering
     NClusters = MinPeriods
@@ -979,7 +988,8 @@ function cluster_inputs(inpath,
 
     # Cluster once regardless of iteration decisions
     push!(cluster_results,
-        cluster(ClusterMethod, ClusteringInputDF, NClusters, nReps, v, random))
+        cluster(ClusterMethod, ClusteringInputDF, NClusters, nReps, v, random)
+    )
 
     # Iteratively add worst periods as extreme periods OR increment number of clusters k
     #    until threshold is met or maximum periods are added (If chosen in inputs)
@@ -1190,7 +1200,7 @@ function cluster_inputs(inpath,
 
     ##### Step 5: Evaluation
 
-    InputDataTest = InputData[(InputData.Group .<= NumDataPoints * 1.0), :]
+    InputDataTest = InputData[(InputData.Group .<= NumSubPeriods * 1.0), :]
     ClusterDataTest = vcat([rpDFs[a] for a in A]...) # To compare fairly, demand is not scaled here
     RMSE = Dict(c => rmse_score(InputDataTest[:, c], ClusterDataTest[:, c])
     for c in OldColNames)
