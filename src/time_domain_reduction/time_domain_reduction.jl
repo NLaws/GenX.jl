@@ -46,8 +46,6 @@ Extract the market time series and their column names to perform TDR on.
 function parse_market_data(myinputs::Dict)
 
     # Market_data.csv
-    # TODO  the inputs[MARKET_LIMITS] should be written in the TDR_results (but they are implemented
-    # so no need to do this now - has to do with the "constant columns")
     price_profiles = []
     price_col_names = []
     
