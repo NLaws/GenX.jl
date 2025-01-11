@@ -2,13 +2,16 @@ function get_settings_path(case::AbstractString)
     return joinpath(case, "settings")
 end
 
+
 function get_settings_path(case::AbstractString, filename::AbstractString)
     return joinpath(get_settings_path(case), filename)
 end
 
+
 function get_default_output_folder(case::AbstractString)
     return joinpath(case, "results")
 end
+
 
 @doc raw"""
     run_genx_case!(case::AbstractString, optimizer::Any=HiGHS.Optimizer)
@@ -41,12 +44,14 @@ function run_genx_case!(case::AbstractString, optimizer::Any = HiGHS.Optimizer)
     end
 end
 
+
 function time_domain_reduced_files_exist(tdrpath)
     tdr_demand = file_exists(tdrpath, ["Demand_data.csv", "Load_data.csv"])
     tdr_genvar = isfile(joinpath(tdrpath, "Generators_variability.csv"))
     tdr_fuels = isfile(joinpath(tdrpath, "Fuels_data.csv"))
     return (tdr_demand && tdr_genvar && tdr_fuels)
 end
+
 
 function run_genx_case_simple!(case::AbstractString, mysetup::Dict, optimizer::Any)
     settings_path = get_settings_path(case)
@@ -106,6 +111,7 @@ function run_genx_case_simple!(case::AbstractString, mysetup::Dict, optimizer::A
     end
 end
 
+
 function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimizer::Any)
     settings_path = get_settings_path(case)
     multistage_settings = get_settings_path(case, "multi_stage_settings.yml") # Multi stage settings YAML file path
@@ -121,6 +127,7 @@ function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimize
         TDRpath = joinpath(first_stage_path, mysetup["TimeDomainReductionFolder"])
         system_path = joinpath(first_stage_path, mysetup["SystemFolder"])
         prevent_doubled_timedomainreduction(system_path)
+        
         if !time_domain_reduced_files_exist(TDRpath)
             if (mysetup["MultiStage"] == 1) &&
                (TDRSettingsDict["MultiStageConcatenate"] == 0)
