@@ -1,0 +1,8 @@
+ConvergenceTolerance: 0.01
+Myopic: 1
+NumStages: 2
+StageLengths:
+- 1
+- 1
+WACC: 0.072
+WriteIntermittentOutputs: 1
