@@ -12,7 +12,11 @@ the
 - inputs[MARKET_PRICES]::Vector{Vector{Float64}}
 """
 function load_market_data!(setup::Dict, path::AbstractString, inputs::Dict)
-    system_dir = joinpath(path, setup["SystemFolder"])
+
+    TDR_directory = joinpath(path, setup["TimeDomainReductionFolder"])
+    # if TDR is used, my_dir = TDR_directory, else my_dir = "system"
+    system_dir = get_systemfiles_path(setup, TDR_directory, path)
+
     # scale_factor is 1,000 for MW to GW, etc.
     scale_factor = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1
 
