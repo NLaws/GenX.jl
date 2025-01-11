@@ -121,7 +121,7 @@ function parse_data(myinputs::Dict)
     all_col_names = [demand_col_names; var_col_names; fuel_col_names]
     all_profiles = [demand_profiles..., var_profiles..., fuel_profiles...]
     return demand_col_names,
-    var_col_names, solar_col_names, wind_col_names, fuel_col_names, price_col_names,
+    var_col_names, solar_col_names, wind_col_names, fuel_col_names,
     all_col_names,
     demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles,
     all_profiles,
@@ -788,7 +788,7 @@ function cluster_inputs(
             ZONES = myinputs["R_ZONES"]
             # Parse input data into useful structures divided by type (demand, wind, solar, fuel, groupings thereof, etc.)
             # TO DO LATER: Replace these with collections of col_names, profiles, zones
-            demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, market_col_names, all_col_names,
+            demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst = parse_data(myinputs)
 
@@ -805,7 +805,7 @@ function cluster_inputs(
         ZONES = myinputs["R_ZONES"]
         # Parse input data into useful structures divided by type (demand, wind, solar, fuel, groupings thereof, etc.)
         # TO DO LATER: Replace these with collections of col_names, profiles, zones
-        demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, market_col_names, all_col_names,
+        demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
         demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
         col_to_zone_map, AllFuelsConst = parse_data(myinputs)
 
@@ -815,6 +815,7 @@ function cluster_inputs(
             all_profiles = [all_profiles..., price_profiles...]
         end
     end
+
 
     # Remove Constant Columns - Add back later in final output by repeating the first value in
     # ConstData in every reduced time step
