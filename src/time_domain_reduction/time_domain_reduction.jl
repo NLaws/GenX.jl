@@ -59,6 +59,14 @@ function parse_market_data(myinputs::Dict)
 end
 
 
+function add_market_limits_back!(df::DataFrames.DataFrame, myinputs::Dict)
+    limit_columns = ["import_limit_MW_" * string(m) for m=1:length(myinputs[MARKET_LIMITS])]
+    for (col, val) in zip(limit_columns, myinputs[MARKET_LIMITS])
+        df[!, col] = vcat([val], fill(missing, nrow(df) - 1))
+    end
+end
+
+
 @doc raw"""
     parse_data(myinputs:Dict)
 
@@ -746,6 +754,11 @@ function cluster_inputs(
             demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst, stage_lengths, total_length, relative_lengths = parse_multi_stage_data(inputs_dict)
+
+            if MARKET_PRICES in keys(myinputs)
+                throw(@error "TDR with MultiStageConcatenate = 1 not implemented for Market = 1")
+            end
+
         else # TDR each period individually
             myinputs = inputs_dict[stage_id]
             RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
@@ -756,6 +769,12 @@ function cluster_inputs(
             demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst = parse_data(myinputs)
+
+            if MARKET_PRICES in keys(myinputs)  # TODO repeated code into method
+                price_profiles, market_col_names = parse_market_data(myinputs)
+                all_col_names = vcat(all_col_names, market_col_names)
+                all_profiles = [all_profiles..., price_profiles...]
+            end
         end
     else  # single stage
         myinputs = load_inputs(mysetup_local, inpath)
@@ -782,6 +801,7 @@ function cluster_inputs(
         all_profiles,
         all_col_names,
         v)
+        
     if length(all_profiles) == 0
         throw(@error(
             "Time domain reduction is not implemented for time series that are all constant."
@@ -1230,11 +1250,17 @@ function cluster_inputs(
         push!(fpDFs, fpDF)
         push!(marketDFs, market_df)
     end
+
     FinalOutputData = vcat(rpDFs...)  # For comparisons with input data to evaluate clustering process
     GVOutputData = vcat(gvDFs...)     # Generators Variability
     DMOutputData = vcat(dmDFs...)     # Demand Profiles
     FPOutputData = vcat(fpDFs...)     # Fuel Profiles
     MarketOutputData = vcat(marketDFs...)
+
+    if MARKET_PRICES in keys(myinputs)
+        add_market_limits_back!(MarketOutputData, myinputs)
+    end
+
 
     ##### Step 5: Evaluation
 
@@ -1412,7 +1438,7 @@ function cluster_inputs(
             end
 
         else
-            @warn("without Concatenation has not yet been fully implemented. ")
+            @warn("without Concatenation has not yet been fully implemented. TBD what that means.")
             input_stage_directory = "inputs_p" * string(stage_id)
             mkpath(joinpath(
                 inpath,
@@ -1522,7 +1548,6 @@ function cluster_inputs(
             end
 
             ### TDR_Results/Fuels_data.csv
-
             fuel_in = load_dataframe(joinpath(inpath,
                 "inputs",
                 input_stage_directory,
@@ -1534,31 +1559,28 @@ function cluster_inputs(
             NewFuelOutput = vcat(SepFirstRow, FPOutputData)
             rename!(NewFuelOutput, FuelCols)
             insertcols!(NewFuelOutput, 1, :Time_Index => 0:(size(NewFuelOutput, 1) - 1))
-            if v
-                println("Writing fuel profiles...")
-            end
             CSV.write(joinpath(inpath, "inputs", input_stage_directory, Fuel_Outfile),
                 NewFuelOutput)
 
             ### Period_map.csv
-            if v
-                println("Writing period map...")
-            end
             CSV.write(joinpath(inpath, "inputs", input_stage_directory, PMap_Outfile),
                 PeriodMap)
 
             ### time_domain_reduction_settings.yml
-            if v
-                println("Writing .yml settings...")
-            end
             YAML.write_file(
                 joinpath(inpath, "inputs", input_stage_directory, YAML_Outfile),
                 myTDRsetup)
+
+            ### Market_data.csv
+            if MARKET_PRICES in keys(myinputs)
+                CSV.write(
+                    joinpath(inpath, "inputs", input_stage_directory, Market_Outfile), 
+                    MarketOutputData
+                )
+            end
         end
-    else
-        if v
-            println("Outputs: Single-Stage")
-        end
+
+    else # single stage
         mkpath(joinpath(inpath, TimeDomainReductionFolder))
 
         ### TDR_Results/Demand_data.csv
@@ -1582,9 +1604,6 @@ function cluster_inputs(
         end
         demand_in = demand_in[1:size(DMOutputData, 1), :]
 
-        if v
-            println("Writing demand file...")
-        end
         CSV.write(joinpath(inpath, Demand_Outfile), demand_in)
 
         ### TDR_Results/Generators_variability.csv
@@ -1596,9 +1615,6 @@ function cluster_inputs(
         GVOutputData = GVOutputData[!, Symbol.(RESOURCE_ZONES)]
         insertcols!(GVOutputData, 1, :Time_Index => 1:size(GVOutputData, 1))
         NewGVColNames = [GVColMap[string(c)] for c in names(GVOutputData)]
-        if v
-            println("Writing resource file...")
-        end
         CSV.write(joinpath(inpath, GVar_Outfile), GVOutputData, header = NewGVColNames)
 
         # Break up VRE-storage components if needed
@@ -1666,7 +1682,6 @@ function cluster_inputs(
             println("Writing .yml settings...")
         end
         YAML.write_file(joinpath(inpath, YAML_Outfile), myTDRsetup)
-
 
         CSV.write(joinpath(inpath, Market_Outfile), MarketOutputData)
     end
