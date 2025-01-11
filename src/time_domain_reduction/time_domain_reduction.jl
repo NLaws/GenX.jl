@@ -823,6 +823,7 @@ function cluster_inputs(
         all_profiles,
         all_col_names,
         v)
+        
     if length(all_profiles) == 0
         throw(@error(
             "Time domain reduction is not implemented for time series that are all constant."
