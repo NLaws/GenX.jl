@@ -24,6 +24,10 @@ function load_market_data!(setup::Dict, path::AbstractString, inputs::Dict)
     df = load_dataframe(joinpath(system_dir, filename))
     limit_columns = names(df, r"^import_limit_MW_")
     price_columns = names(df, r"^price_per_MWh_")
+    
+    if !(length(limit_columns) == length(price_columns))
+        throw(@error "$filename at $system_dir does not have equal number of import_limit_MW_X and price_per_MWh_X columns")
+    end
 
     inputs[MARKET_LIMITS] = Vector{Float64}()
     for col in limit_columns
