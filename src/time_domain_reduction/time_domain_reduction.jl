@@ -677,8 +677,9 @@ function cluster_inputs(
     ##### Step 0: Load in settings and data
 
     # Read time domain reduction settings file time_domain_reduction_settings.yml
-    myTDRsetup = YAML.load(open(joinpath(settings_path,
-        "time_domain_reduction_settings.yml")))
+    myTDRsetup = YAML.load(
+        open(joinpath(settings_path, "time_domain_reduction_settings.yml"))
+    )
     update_deprecated_tdr_inputs!(myTDRsetup)
 
     # Accept model parameters from the settings file time_domain_reduction_settings.yml
@@ -726,26 +727,31 @@ function cluster_inputs(
 
     if MultiStage == 1
         inputs_dict = Dict()
-        for t in 1:NumStages
 
-            # Step 0) Set Model Year
-            mysetup["MultiStageSettingsDict"]["CurStage"] = t
-
-            # Step 1) Load Inputs
-            global inpath_sub = string("$inpath/inputs/inputs_p", t)
-
-            # this prevents doubled time domain reduction in stages past
-            # the first, even if the first stage is okay.
-            prevent_doubled_timedomainreduction(joinpath(inpath_sub,
-                mysetup["SystemFolder"]))
-
-            inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
-
-            inputs_dict[t] = configure_multi_stage_inputs(inputs_dict[t],
-                mysetup["MultiStageSettingsDict"],
-                mysetup["NetworkExpansion"])
-        end
         if MultiStageConcatenate == 1
+            # TODO in most cases we do not need all of the inputs?
+            for t in 1:NumStages
+    
+                # Step 0) Set Model Year
+                mysetup["MultiStageSettingsDict"]["CurStage"] = t
+    
+                # Step 1) Load Inputs
+                global inpath_sub = string("$inpath/inputs/inputs_p", t)
+    
+                # this prevents doubled time domain reduction in stages past
+                # the first, even if the first stage is okay.
+                prevent_doubled_timedomainreduction(joinpath(inpath_sub,
+                    mysetup["SystemFolder"]))
+    
+                inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
+    
+                inputs_dict[t] = configure_multi_stage_inputs(
+                    inputs_dict[t],
+                    mysetup["MultiStageSettingsDict"],
+                    mysetup["NetworkExpansion"]
+                )
+            end
+    
             RESOURCE_ZONES = inputs_dict[1]["RESOURCE_ZONES"]
             RESOURCES = inputs_dict[1]["RESOURCE_NAMES"]
             ZONES = inputs_dict[1]["R_ZONES"]
@@ -759,7 +765,23 @@ function cluster_inputs(
                 throw(@error "TDR with MultiStageConcatenate = 1 not implemented for Market = 1")
             end
 
-        else # TDR each period individually
+        else # TDR each period individually (MultiStageConcatenate == 0)
+            t = stage_id
+            # Step 0) Set Model Year
+            mysetup["MultiStageSettingsDict"]["CurStage"] = t
+            # Step 1) Load Inputs
+            global inpath_sub = string("$inpath/inputs/inputs_p", t)
+            # this prevents doubled time domain reduction in stages past
+            # the first, even if the first stage is okay.
+            prevent_doubled_timedomainreduction(
+                joinpath(inpath_sub, mysetup["SystemFolder"])
+            )
+
+            inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
+            inputs_dict[t] = configure_multi_stage_inputs(inputs_dict[t],
+                mysetup["MultiStageSettingsDict"],
+                mysetup["NetworkExpansion"])
+    
             myinputs = inputs_dict[stage_id]
             RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
             RESOURCES = myinputs["RESOURCE_NAMES"]
