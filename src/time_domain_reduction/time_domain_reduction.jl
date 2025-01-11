@@ -39,10 +39,29 @@ function rmse_score(y_true, y_pred)
 end
 
 @doc raw"""
+    parse_market_data(myinputs:Dict)
+
+Extract the market time series and their column names to perform TDR on.
+"""
+function parse_market_data(myinputs::Dict)
+
+    # Market_data.csv
+    # TODO how do reconstruct at the end with the inputs[MARKET_LIMITS]?
+    price_profiles = []
+    price_col_names = []
+    
+    M = length(myinputs[MARKET_LIMITS])  # number of market price tiers
+    price_profiles = [myinputs[MARKET_PRICES][m] for m in 1:M]
+    price_col_names = ["price_per_MWh_" * string(m) for m in 1:M]
+
+    price_profiles, price_col_names
+end
+
+
+@doc raw"""
     parse_data(myinputs:Dict)
 
 Get demand, solar, wind, and other curves from the input data created by load_inputs.
-
 """
 function parse_data(myinputs::Dict)
     # Assumes no missing data
@@ -90,26 +109,16 @@ function parse_data(myinputs::Dict)
         end
     end
 
-    # Market_data.csv
-    # TODO how do reconstruct at the end with the inputs[MARKET_LIMITS]?
-    price_profiles = []
-    price_col_names = []
-    if MARKET_PRICES in keys(myinputs)
-        M = length(myinputs[MARKET_LIMITS])  # number of market price tiers
-        price_profiles = [myinputs[MARKET_PRICES][m] for m in M]
-        price_col_names = ["price_per_MWh_" * string(m) for m in M]
-    end
-
-
-    all_col_names = [demand_col_names; var_col_names; fuel_col_names; price_col_names]
-    all_profiles = [demand_profiles..., var_profiles..., fuel_profiles..., price_profiles...]
+    all_col_names = [demand_col_names; var_col_names; fuel_col_names]
+    all_profiles = [demand_profiles..., var_profiles..., fuel_profiles...]
     return demand_col_names,
-    var_col_names, solar_col_names, wind_col_names, fuel_col_names, price_col_names,
+    var_col_names, solar_col_names, wind_col_names, fuel_col_names,
     all_col_names,
     demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles,
     all_profiles,
     col_to_zone_map, AllFuelsConst
 end
+
 
 @doc raw"""
     parse_mutli_period_data(inputs_dict)
@@ -647,15 +656,14 @@ to separate Vre_and_stor_solar_variability.csv and Vre_and_stor_wind_variability
 and wind profiles for co-located resources will be separated into different CSV files to be read by loading the inputs 
 after the clustering of the inputs has occurred. 
 """
-function cluster_inputs(inpath,
+function cluster_inputs(
+        inpath,
         settings_path,
         mysetup,
         stage_id = -99,
         v = false;
-        random = true)
-    if v
-        println(now())
-    end
+        random = true,
+    )
 
     ##### Step 0: Load in settings and data
 
@@ -705,6 +713,8 @@ function cluster_inputs(inpath,
     mysetup_MS["DoNotReadPeriodMap"] = 1
     mysetup_MS["ParameterScale"] = 0
 
+    market_col_names = []
+
     if MultiStage == 1
         inputs_dict = Dict()
         for t in 1:NumStages
@@ -727,9 +737,6 @@ function cluster_inputs(inpath,
                 mysetup["NetworkExpansion"])
         end
         if MultiStageConcatenate == 1
-            if v
-                println("MultiStage with Concatenation")
-            end
             RESOURCE_ZONES = inputs_dict[1]["RESOURCE_ZONES"]
             RESOURCES = inputs_dict[1]["RESOURCE_NAMES"]
             ZONES = inputs_dict[1]["R_ZONES"]
@@ -739,39 +746,34 @@ function cluster_inputs(inpath,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst, stage_lengths, total_length, relative_lengths = parse_multi_stage_data(inputs_dict)
         else # TDR each period individually
-            if v
-                println("MultiStage without Concatenation")
-            end
-            if v
-                println("---> STAGE ", stage_id)
-            end
             myinputs = inputs_dict[stage_id]
             RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
             RESOURCES = myinputs["RESOURCE_NAMES"]
             ZONES = myinputs["R_ZONES"]
             # Parse input data into useful structures divided by type (demand, wind, solar, fuel, groupings thereof, etc.)
             # TO DO LATER: Replace these with collections of col_names, profiles, zones
-            demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, market_col_names, all_col_names,
+            demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst = parse_data(myinputs)
         end
-    else
-        if v
-            println("Not MultiStage")
-        end
+    else  # single stage
         myinputs = load_inputs(mysetup_local, inpath)
         RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
         RESOURCES = myinputs["RESOURCE_NAMES"]
         ZONES = myinputs["R_ZONES"]
         # Parse input data into useful structures divided by type (demand, wind, solar, fuel, groupings thereof, etc.)
         # TO DO LATER: Replace these with collections of col_names, profiles, zones
-        demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, market_col_names, all_col_names,
+        demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
         demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
         col_to_zone_map, AllFuelsConst = parse_data(myinputs)
+
+        if MARKET_PRICES in keys(myinputs)
+            price_profiles, market_col_names = parse_market_data(myinputs)
+            all_col_names = vcat(all_col_names, market_col_names)
+            all_profiles = [all_profiles..., price_profiles...]
+        end
     end
-    if v
-        println()
-    end
+
 
     # Remove Constant Columns - Add back later in final output by repeating the first value in
     # ConstData in every reduced time step
@@ -1243,13 +1245,7 @@ function cluster_inputs(inpath,
     ##### Step 6: Print to File
 
     if MultiStage == 1
-        if v
-            print("Outputs: MultiStage")
-        end
         if MultiStageConcatenate == 1
-            if v
-                println(" with Concatenation")
-            end
             groups_per_stage = round.(Int, size(A, 1) * relative_lengths)
             group_ranges = [if i == 1
                                 1:groups_per_stage[1]
@@ -1416,20 +1412,20 @@ function cluster_inputs(inpath,
 
         else
             @warn("without Concatenation has not yet been fully implemented. ")
-            if v
-                println("( STAGE ", stage_id, " )")
-            end
             input_stage_directory = "inputs_p" * string(stage_id)
-            mkpath(joinpath(inpath,
+            mkpath(joinpath(
+                inpath,
                 "inputs",
                 input_stage_directory,
-                TimeDomainReductionFolder))
+                TimeDomainReductionFolder
+            ))
 
             ### TDR_Results/Demand_data.csv
             demand_in = get_demand_dataframe(joinpath(inpath,
                 "inputs",
                 input_stage_directory,
-                mysetup["SystemFolder"]))
+                mysetup["SystemFolder"]
+            ))
             demand_in[!, :Sub_Weights] = demand_in[!, :Sub_Weights] * 1.0
             demand_in[1:length(W), :Sub_Weights] .= W
             demand_in[!, :Rep_Periods][1] = length(W)
