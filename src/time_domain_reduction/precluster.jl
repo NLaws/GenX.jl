@@ -13,6 +13,7 @@ function run_timedomainreduction!(case::AbstractString)
     mysetup = configure_settings(genx_settings) # mysetup dictionary stores settings and GenX-specific parameters
 
     if mysetup["MultiStage"] == 0
+        println("Clustering Time Series Data ...")
         cluster_inputs(case, settings_path, mysetup)
     elseif mysetup["MultiStage"] == 1
         run_timedomainreduction_multistage!(case)
