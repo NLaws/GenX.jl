@@ -79,13 +79,22 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
             # reserve constraint is applied to peak load, there is only 1 time step in the contstraint
             Tslack = 1
         end
+
         @variable(EP, vCapResSlack[res = 1:NCRM, t = 1:Tslack]>=0)
         add_similar_to_expression!(EP[:eCapResMarBalance], vCapResSlack)
 
-        @expression(EP,
-            eCapResSlack_Year[res = 1:NCRM],
-            sum(EP[:vCapResSlack][res, t] * inputs["omega"][t] for t in 1:Tslack)
-        )
+        if CapacityReserveMargin == 2
+            # we do not want to scale the slack variable for TDR accounting
+            @expression(EP,
+                eCapResSlack_Year[res = 1:NCRM],
+                sum(EP[:vCapResSlack][res, t] for t in 1:Tslack)
+            )
+        else
+            @expression(EP,
+                eCapResSlack_Year[res = 1:NCRM],
+                sum(EP[:vCapResSlack][res, t] * inputs["omega"][t] for t in 1:Tslack)
+            )
+        end
         @expression(EP,
             eCCapResSlack[res = 1:NCRM],
             inputs["dfCapRes_slack"][res, :PriceCap] * EP[:eCapResSlack_Year][res]
@@ -97,7 +106,7 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
     if CapacityReserveMargin == 2  # reserve constraint applies at peak load only
         max_demand_by_zone = maximum(inputs["pD"], dims=1)
         @constraint(EP,
-            cCapacityResMargin[res = 1:NCRM, t = 1:1],
+            cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
             EP[:eCapResMarBalance][res, t] >= sum(
                 max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
                 for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])

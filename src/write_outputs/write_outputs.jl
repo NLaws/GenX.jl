@@ -286,6 +286,12 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
         println(elapsed_time)
     end
 
+    if setup["CapacityReserveMargin"] == 2
+        elapsed_time = @elapsed write_cap_reserve_2(path, inputs, setup, EP)
+        println("Time elapsed for cap. reserve results is")
+        println(elapsed_time)
+    end
+
     if setup["MultiStage"] == 0
         dfEnergyRevenue = DataFrame()
         dfChargingcost = DataFrame()
