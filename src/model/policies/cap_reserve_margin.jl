@@ -73,12 +73,12 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
     println("Capacity Reserve Margin Policies Module")
 
     # if input files are present, add capacity reserve margin slack variables
+    Tslack = T
+    if CapacityReserveMargin == 2
+        # reserve constraint is applied to peak load, there is only 1 time step in the contstraint
+        Tslack = 1
+    end
     if haskey(inputs, "dfCapRes_slack")
-        Tslack = T
-        if CapacityReserveMargin == 2
-            # reserve constraint is applied to peak load, there is only 1 time step in the contstraint
-            Tslack = 1
-        end
 
         @variable(EP, vCapResSlack[res = 1:NCRM, t = 1:Tslack]>=0)
         add_similar_to_expression!(EP[:eCapResMarBalance], vCapResSlack)
