@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `MultiStageConcatenate: 0`
 -  genx_settings.yml option `CapacityReserveMargin: 2` for applying capacity the capacity reserve
    constraint only at the peak load for all resources.
+- consolidated ESR definitions into one place
 
 ## Unreleased
 
