@@ -20,8 +20,9 @@ function write_reserve_margin_slack(path::AbstractString,
         if setup["ParameterScale"] == 1
             temp_ResMar_slack .*= ModelScalingFactor # Convert GW to MW
         end
+        Tslack = setup["CapacityReserveMargin"] == 2 ? 1 : T
         dfResMar_slack = hcat(dfResMar_slack,
-            DataFrame(temp_ResMar_slack, [Symbol("t$t") for t in 1:T]))
+            DataFrame(temp_ResMar_slack, [Symbol("t$t") for t in 1:Tslack]))
         CSV.write(joinpath(path, "ReserveMargin_prices_and_penalties.csv"),
             dftranspose(dfResMar_slack, false),
             writeheader = false)
