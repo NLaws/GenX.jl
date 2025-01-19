@@ -24,6 +24,11 @@ function write_cap_reserve_2(path::AbstractString, inputs::Dict, setup::Dict, EP
 
     default = repeat([0.0], length(RHS))
 
+    ring_fenced_contribution = default
+    if haskey(inputs, "ring_fenced_generators")
+        ring_fenced_contribution = [inputs["ring_fenced_generators"]]
+    end
+
     df = DataFrame(
         thermal_contribution = vec(value.(EP[:eCapResMarBalanceThermal])),
         vre_contribution = !isempty(inputs["VRE"]) ? vec(value.(EP[:eCapResMarBalanceVRE])) : default,
@@ -31,8 +36,9 @@ function write_cap_reserve_2(path::AbstractString, inputs::Dict, setup::Dict, EP
         must_run_contribution = !isempty(inputs["MUST_RUN"]) ? vec(value.(EP[:eCapResMarBalanceMustRun])) : default,
         storage_contribution = !isempty(inputs["STOR_ALL"]) ? vec(value.(EP[:eCapResMarBalanceStor])) : default,
         slack_contribution = haskey(inputs, "dfCapRes_slack") ? vec(value.(EP[:vCapResSlack])) : default,
+        ring_fenced_contribution = ring_fenced_contribution,
         required_reserve = RHS,
-        installed_reserve = vec(value.(EP[:eCapResMarBalance])),
+        installed_reserve = vec(value.(EP[:eCapResMarBalance])) + ring_fenced_contribution,
         peak_demand = vec(max_demand_by_zone),
     )
     df .= round.(df, digits=3)

@@ -104,13 +104,19 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
     end
 
     if CapacityReserveMargin == 2  # reserve constraint applies at peak load only
+
         max_demand_by_zone = maximum(inputs["pD"], dims=1)
+        free_capacity = 0.0
+        if haskey(inputs, "ring_fenced_generators")
+            free_capacity = inputs["ring_fenced_generators"]
+        end
+
         @constraint(EP,
             cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
             EP[:eCapResMarBalance][res, t] >= sum(
                 max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
                 for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])
-            )
+            ) - free_capacity
         )
     else
         @constraint(EP,

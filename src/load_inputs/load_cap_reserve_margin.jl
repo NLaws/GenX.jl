@@ -11,17 +11,22 @@ function load_cap_reserve_margin!(setup::Dict, path::AbstractString, inputs::Dic
         df = load_dataframe(joinpath(path, filename))
         inputs["dfCapRes_slack"] = df
         inputs["dfCapRes_slack"][!, :PriceCap] ./= scale_factor # Million $/GW if scaled, $/MW if not scaled
+        println(filename * " Successfully Read!")
     end
-    println(filename * " Successfully Read!")
 
     filename = "Capacity_reserve_margin.csv"
     df = load_dataframe(joinpath(path, filename))
-
     mat = extract_matrix_from_dataframe(df, "CapRes")
     inputs["dfCapRes"] = mat
     inputs["NCapacityReserveMargin"] = size(mat, 2)
-
     println(filename * " Successfully Read!")
+
+    filename = "ring_fenced_generators.csv"
+    fpath = joinpath(path, filename)
+    if isfile(fpath)
+        inputs["ring_fenced_generators"] = load_dataframe(fpath)[!, "firm_capacity"][1] / scale_factor
+        println(filename * " Successfully Read!")
+    end
 end
 
 @doc raw"""
