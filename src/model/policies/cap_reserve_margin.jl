@@ -106,6 +106,10 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
     if CapacityReserveMargin == 2  # reserve constraint applies at peak load only
 
         max_demand_by_zone = maximum(inputs["pD"], dims=1)
+        if haskey(inputs, "capacity_reserve_peak_load")
+            max_demand_by_zone = fill(inputs["capacity_reserve_peak_load"], size(max_demand_by_zone)...)
+        end
+
         free_capacity = 0.0
         if haskey(inputs, "ring_fenced_generators")
             free_capacity = inputs["ring_fenced_generators"]
