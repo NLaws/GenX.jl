@@ -38,6 +38,7 @@ function write_cap_reserve_2(path::AbstractString, inputs::Dict, setup::Dict, EP
         hydro_contribution = !isempty(inputs["HYDRO_RES"]) ? vec(value.(EP[:eCapResMarBalanceHydro])) : default,
         must_run_contribution = !isempty(inputs["MUST_RUN"]) ? vec(value.(EP[:eCapResMarBalanceMustRun])) : default,
         storage_contribution = !isempty(inputs["STOR_ALL"]) ? vec(value.(EP[:eCapResMarBalanceStor])) : default,
+        market_contribution = haskey(inputs, "capacity_market") ? vec(value.(EP[:vCapMkt])) : default,
         slack_contribution = haskey(inputs, "dfCapRes_slack") ? vec(value.(EP[:vCapResSlack])) : default,
         ring_fenced_contribution = ring_fenced_contribution,
         required_reserve = RHS,

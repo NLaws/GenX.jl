@@ -115,6 +115,22 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
             free_capacity = inputs["ring_fenced_generators"]
         end
 
+        if haskey(inputs, "capacity_market")
+            @variable(EP, vCapMkt[res = 1:NCRM, t = 1:Tslack] >= 0)
+            @constraint(EP, cCapMktLimit[res = 1:NCRM, t = 1:Tslack],
+                vCapMkt[res, t] <= inputs["capacity_market"]["limit"]
+            )
+            @expression(EP,
+                eCapMktCost,
+                sum(
+                    inputs["capacity_market"]["price"] * vCapMkt[res, t]
+                    for res = 1:NCRM, t = 1:Tslack
+                )
+            )
+            add_to_expression!(EP[:eObj], eCapMktCost)
+            add_similar_to_expression!(EP[:eCapResMarBalance], vCapMkt)
+        end
+
         @constraint(EP,
             cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
             EP[:eCapResMarBalance][res, t] >= sum(
