@@ -27,13 +27,13 @@ function write_market_results(path::AbstractString, inputs::Dict, setup::Dict, E
         mwh_purchases["hourly_purchases_mwh_tier_$SELL_TIER"] - hourly_sales
     ]
     summary = Dict()
-    summary["net_mwh_sales"] = sum(net_hourly_sales)
-    summary["tier_$(SELL_TIER)_net_mwh_purchases"] = sum(net_purchase_in_sell_tier)
-    summary["total_mwh_sales"] = sum(sum(hourly_sales))
+    summary["net_mwh_sales"] = sum(net_hourly_sales .* inputs["omega"])
+    summary["tier_$(SELL_TIER)_net_mwh_purchases"] = sum(net_purchase_in_sell_tier .* inputs["omega"])
+    summary["total_mwh_sales"] = sum(sum(hourly_sales) .* inputs["omega"])
     summary["total_sales_benefit"] = [JuMP.value(EP[:eMarketSalesBenefit])] * scale_factor^2
-    summary["total_mwh_purchases"] = sum(sum(values(mwh_purchases)))
+    summary["total_mwh_purchases"] = sum(sum(values(mwh_purchases)) .* inputs["omega"])
     summary["total_purchases_cost"] = [JuMP.value(EP[:eMarketPurchasesCost])] * scale_factor^2
-    summary["net_mwh_purchases"] = summary["total_mwh_purchases"] - sum(mwh_purchases["hourly_purchases_mwh_tier_$SELL_TIER"]) + sum(net_purchase_in_sell_tier)
+    summary["net_mwh_purchases"] = summary["total_mwh_purchases"] - sum(mwh_purchases["hourly_purchases_mwh_tier_$SELL_TIER"] .* inputs["omega"]) + summary["tier_$(SELL_TIER)_net_mwh_purchases"]
     df = DataFrame(summary)
 
     CSV.write(joinpath(path, "market_results.csv"), df)

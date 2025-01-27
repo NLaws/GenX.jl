@@ -131,13 +131,24 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
             add_similar_to_expression!(EP[:eCapResMarBalance], vCapMkt)
         end
 
-        @constraint(EP,
-            cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
-            EP[:eCapResMarBalance][res, t] >= sum(
-                max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
-                for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])
-            ) - free_capacity
-        )
+        if haskey(inputs, "required_capacity")
+
+            @constraint(EP,
+                cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
+                EP[:eCapResMarBalance][res, t] >= inputs["required_capacity"] - free_capacity
+            )
+
+        else # use the peak load * (1 + margin)
+
+            @constraint(EP,
+                cCapacityResMargin[res = 1:NCRM, t = 1:Tslack],
+                EP[:eCapResMarBalance][res, t] >= sum(
+                    max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
+                    for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])
+                ) - free_capacity
+            )
+
+        end
     else
         @constraint(EP,
             cCapacityResMargin[res = 1:NCRM, t = 1:T],
