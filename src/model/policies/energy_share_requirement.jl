@@ -1,3 +1,21 @@
+"""
+    get_nuclear_technologies(inputs::Dict)::Vector{Int}
+
+Get the indices of any resources that have "nuclear" in the `technology` field.
+"""
+function get_nuclear_technologies(inputs::Dict)::Vector{Int}
+    ids = Int[]
+    for r in inputs["RESOURCES"]
+        if haskey(r, :technology)  # should be hasfield :/
+            if occursin("nuclear", lowercase(r.technology))
+                push!(ids, r.id)
+            end
+        end
+    end
+    return ids
+end
+
+
 @doc raw"""
 	energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
 This function establishes constraints that can be flexibily applied to define alternative forms of policies that require generation of a minimum quantity of megawatt-hours from a set of qualifying resources, such as renewable portfolio standard (RPS) or clean electricity standard (CES) policies prevalent in different jurisdictions.
@@ -44,6 +62,20 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         )
     )
     add_similar_to_expression!(EP[:eESR], eESRDischarge)
+
+    if setup["ESRExcludeNuclearTechnologyGeneration"] == 1
+        nukes = get_nuclear_technologies(inputs)
+        if length(nukes) > 0
+            @expression(EP, eESRnoNukes[ESR = 1:inputs["nESR"]],
+                -1* sum(
+                    inputs["dfESR"][z, ESR] * inputs["omega"][t] * 
+                    sum(EP[:vP][y, t] for y in intersect(nukes, resources_in_zone_by_rid(gen, z)))
+                    for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
+                )
+            )
+            add_similar_to_expression!(EP[:eESR], eESRnoNukes)
+        end
+    end
 
     # if input files are present, add energy share requirement slack variables
     if haskey(inputs, "dfESR_slack")
