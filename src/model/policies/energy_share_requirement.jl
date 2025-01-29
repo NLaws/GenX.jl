@@ -72,13 +72,13 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         nukes = get_nuclear_technologies(inputs)
         if length(nukes) > 0
             @expression(EP, eESRnoNukes[ESR = 1:inputs["nESR"]],
-                -1* sum(
+                sum(
                     inputs["dfESR"][z, ESR] * inputs["omega"][t] * 
                     sum(EP[:vP][y, t] for y in intersect(nukes, resources_in_zone_by_rid(gen, z)))
                     for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
                 )
             )
-            add_similar_to_expression!(EP[:eESR], eESRnoNukes)
+            add_similar_to_expression!(EP[:eESR], -1 * eESRnoNukes)
         end
     end
 
@@ -87,7 +87,6 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         @variable(EP, vESR_slack[ESR = 1:inputs["nESR"]] >= 0)
         add_similar_to_expression!(EP[:eESR], vESR_slack)
 
-        @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
 
         @expression(EP,
             eCESRSlack[ESR = 1:inputs["nESR"]],
@@ -101,4 +100,13 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         add_to_expression!(EP[:eObj], eCTotalESRSlack)
     end
 
+    if !haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, eESRgeneration - eESRload >= 0)
+
+    elseif haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
+        
+    elseif haskey(inputs, "dfESR_slack") && setup["ESRExcludeNuclearTechnologyGeneration"] == 1
+        @constraint(EP, eESRgeneration - eESRload - eESRnoNukes + vESR_slack >= 0)
+    end
 end
