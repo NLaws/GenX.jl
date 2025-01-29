@@ -50,18 +50,23 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
     ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
     @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR] >= 0)
 
-    # Generation from eligible generators - ESR fraction * demand >= 0
-    @expression(EP, eESRDischarge[ESR = 1:inputs["nESR"]],
+    # esr(gen[y], tag = ESR) is the value in Resource_energy_share_requirement.csv
+
+    @expression(EP, eESRgeneration[ESR = 1:inputs["nESR"]],
         sum(
             inputs["omega"][t] * esr(gen[y], tag = ESR) * EP[:vP][y, t]
             for y in ids_with_policy(gen, esr, tag = ESR), t in 1:T
         )
-        - sum(
+    )
+    @expression(EP, eESRload[ESR = 1:inputs["nESR"]],
+        sum(
             inputs["dfESR"][z, ESR] * inputs["omega"][t] * inputs["pD"][t, z]
             for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
         )
     )
-    add_similar_to_expression!(EP[:eESR], eESRDischarge)
+    # TODO the add_similar_to_expression! is not working for the ESR constraint (it does not resolve
+    # to >= 0). For now fixing the issue with a constraint in the dfESR_slack block below.
+    add_similar_to_expression!(EP[:eESR], eESRgeneration - eESRload)
 
     if setup["ESRExcludeNuclearTechnologyGeneration"] == 1
         nukes = get_nuclear_technologies(inputs)
@@ -81,6 +86,8 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
     if haskey(inputs, "dfESR_slack")
         @variable(EP, vESR_slack[ESR = 1:inputs["nESR"]] >= 0)
         add_similar_to_expression!(EP[:eESR], vESR_slack)
+
+        @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
 
         @expression(EP,
             eCESRSlack[ESR = 1:inputs["nESR"]],
