@@ -21,7 +21,7 @@ function limit_ng_techs_to_40_cap_factor(EP::Model, inputs::Dict, setup::Dict)
     T = inputs["T"] 
 
     @constraint(EP, cNG40CapFactor[y in ng_resources],
-        sum(inputs["omega"][t] * EP[:vP][y, t] for t in 1:T) <= 0.40 * EP[:eTotalCap][y] * T
+        sum(EP[:vP][y, t] for t in 1:T) <= 0.40 * EP[:eTotalCap][y] * T
     )
     @info "NG_ technologies limited to 40% caapcity factor."
 
