@@ -107,6 +107,6 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
         
     elseif haskey(inputs, "dfESR_slack") && setup["ESRExcludeNuclearTechnologyGeneration"] == 1
-        @constraint(EP, eESRgeneration - eESRload - eESRnoNukes + vESR_slack >= 0)
+        @constraint(EP, eESRgeneration - eESRload + eESRnoNukes + vESR_slack >= 0)
     end
 end
