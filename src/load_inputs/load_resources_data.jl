@@ -56,14 +56,16 @@ end
 Internal function to get a map of GenX resource type their corresponding names in the summary table.
 """
 function _get_summary_map()
-    names_map = Dict{Symbol, String}(:Electrolyzer => "Electrolyzer",
+    names_map = Dict{Symbol, String}(
+        :Electrolyzer => "Electrolyzer",
         :FlexDemand => "Flexible_demand",
         :Hydro => "Hydro",
         :Storage => "Storage",
         :Thermal => "Thermal",
         :Vre => "VRE",
         :MustRun => "Must_run",
-        :VreStorage => "VRE_and_storage")
+        :VreStorage => "VRE_and_storage"
+    )
     max_length = maximum(length.(values(names_map)))
     for (k, v) in names_map
         names_map[k] = v * repeat(" ", max_length - length(v))
@@ -1053,10 +1055,12 @@ Adds resources to the `inputs` `Dict` with the key "RESOURCES" together with sev
 - `gen (Vector{<:AbstractResource})`: Array of GenX resources.
 
 """
-function add_resources_to_input_data!(inputs::Dict,
+function add_resources_to_input_data!(
+        inputs::Dict,
         setup::Dict,
         case_path::AbstractString,
-        gen::Vector{<:AbstractResource})
+        gen::Vector{<:AbstractResource},
+    )
 
     # Number of resources
     G = length(gen)
@@ -1422,10 +1426,12 @@ This function loads resources data from the resources_path folder and create the
 Raises:
     DeprecationWarning: If the `Generators_data.csv` file is found, a deprecation warning is issued, together with an error message.
 """
-function load_resources_data!(inputs::Dict,
+function load_resources_data!(
+        inputs::Dict,
         setup::Dict,
         case_path::AbstractString,
-        resources_path::AbstractString)
+        resources_path::AbstractString,
+    )
     if isfile(joinpath(case_path, "Generators_data.csv"))
         msg = "The `Generators_data.csv` file was deprecated in release v0.4. " *
               "Please use the new interface for generators creation, and see the documentation for additional details."

@@ -40,6 +40,7 @@ function default_settings()
         "PoliciesFolder" => "policies",
         "ObjScale" => 1,
         "Market" => 0,
+        "ESRExcludeNuclearTechnologyGeneration" => 0,
     )
 end
 
