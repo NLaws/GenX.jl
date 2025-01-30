@@ -41,6 +41,7 @@ function default_settings()
         "ObjScale" => 1,
         "Market" => 0,
         "ESRExcludeNuclearTechnologyGeneration" => 0,
+        "LimitNG_To40CF" => 0,
     )
 end
 
