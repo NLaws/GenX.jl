@@ -51,6 +51,7 @@ function investment_energy!(EP::Model, inputs::Dict, setup::Dict)
     STOR_ALL = inputs["STOR_ALL"] # Set of all storage resources
     NEW_CAP_ENERGY = inputs["NEW_CAP_ENERGY"] # Set of all storage resources eligible for new energy capacity
     RET_CAP_ENERGY = inputs["RET_CAP_ENERGY"] # Set of all storage resources eligible for energy capacity retirements
+    eTotalCap = EP[:eTotalCap]
 
     ### Variables ###
 
@@ -76,11 +77,11 @@ function investment_energy!(EP::Model, inputs::Dict, setup::Dict)
 
     @expression(EP, eTotalCapEnergy[y in STOR_ALL],
         if (y in intersect(NEW_CAP_ENERGY, RET_CAP_ENERGY))
-            eExistingCapEnergy[y] + EP[:vCAPENERGY][y] - EP[:vRETCAPENERGY][y]
+            eExistingCapEnergy[y] + vCAPENERGY[y] - vRETCAPENERGY[y]
         elseif (y in setdiff(NEW_CAP_ENERGY, RET_CAP_ENERGY))
-            eExistingCapEnergy[y] + EP[:vCAPENERGY][y]
+            eExistingCapEnergy[y] + vCAPENERGY[y]
         elseif (y in setdiff(RET_CAP_ENERGY, NEW_CAP_ENERGY))
-            eExistingCapEnergy[y] - EP[:vRETCAPENERGY][y]
+            eExistingCapEnergy[y] - vRETCAPENERGY[y]
         else
             eExistingCapEnergy[y]
         end
@@ -116,8 +117,7 @@ function investment_energy!(EP::Model, inputs::Dict, setup::Dict)
     if MultiStage == 1
         @constraint(EP,
             cExistingCapEnergy[y in STOR_ALL],
-            EP[:vEXISTINGCAPENERGY][y]==existing_cap_mwh(gen[y])
-        )
+            vEXISTINGCAPENERGY[y]==existing_cap_mwh(gen[y]))
     end
 
     ## Constraints on retirements and capacity additions
@@ -145,14 +145,11 @@ function investment_energy!(EP::Model, inputs::Dict, setup::Dict)
     # Max and min constraints on energy storage capacity built (as proportion to discharge power capacity)
     @constraint(EP,
         cMinCapEnergyDuration[y in STOR_ALL],
-        EP[:eTotalCapEnergy][y] >= min_duration(gen[y]) * EP[:eTotalCap][y]
-    )
-
+        eTotalCapEnergy[y]>=min_duration(gen[y]) * eTotalCap[y])
     # NOTE for existing generators the following constraint is:
     # Existing_Cap_MWh <= Max_Duration * Existing_Cap_MW which can be infeasible with rounding
     # (eTotalCap is defined in investment_discharge.jl)
     @constraint(EP,
         cMaxCapEnergyDuration[y in STOR_ALL],
-        EP[:eTotalCapEnergy][y] <= max_duration(gen[y]) * EP[:eTotalCap][y]
-    )
+        eTotalCapEnergy[y]<=max_duration(gen[y]) * eTotalCap[y])
 end
