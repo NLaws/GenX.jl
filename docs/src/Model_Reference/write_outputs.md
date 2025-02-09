@@ -179,3 +179,9 @@ GenX.write_angles
 ```@docs
 GenX.write_settings_file
 ```
+
+## Write Allam Cycle LOX
+```@docs
+GenX.write_allam_capacity
+GenX.write_allam_output
+```
