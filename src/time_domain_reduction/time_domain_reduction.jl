@@ -266,7 +266,7 @@ function cluster(ClusterMethod,
         NClusters,
         nIters,
         v = false,
-        random = true)
+        random = false)
     if ClusterMethod == "kmeans"
         DistMatrix = pairwise(Euclidean(), Matrix(ClusteringInputDF), dims = 2)
         R = kmeans(Matrix(ClusteringInputDF), NClusters, init = :kmcen)
@@ -669,7 +669,7 @@ function cluster_inputs(
         mysetup,
         stage_id = -99,
         v = false;
-        random = true,
+        random = false,
     )
 
     ##### Step 0: Load in settings and data

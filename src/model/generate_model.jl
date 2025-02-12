@@ -250,6 +250,10 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
         add_known_price_market_model!(EP, inputs, setup)
     end
 
+    if setup["LimitNG_To40CF"] == 1
+        limit_ng_techs_to_40_cap_factor(EP, inputs, setup)
+    end
+
     ## Define the objective function
     @objective(EP, Min, setup["ObjScale"]*EP[:eObj])
 
