@@ -19,6 +19,11 @@ function load_cap_reserve_margin!(setup::Dict, path::AbstractString, inputs::Dic
     mat = extract_matrix_from_dataframe(df, "CapRes")
     inputs["dfCapRes"] = mat
     inputs["NCapacityReserveMargin"] = size(mat, 2)
+
+    gen = inputs["RESOURCES"]
+    res = 1:inputs["NCapacityReserveMargin"]
+    inputs["DERATING_FACTOR"] = [derating_factor(g, tag = r) for g in gen, r = res]
+
     println(filename * " Successfully Read!")
 
     filename = "ring_fenced_generators.csv"

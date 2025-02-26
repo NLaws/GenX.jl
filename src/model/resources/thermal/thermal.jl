@@ -30,14 +30,12 @@ function thermal!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:eGenerationByZone], eGenerationByThermAll)
 
     # Capacity Reserves Margin policy
+    capresfactor = inputs["DERATING_FACTOR"]
     if setup["CapacityReserveMargin"] == 1
         ncapres = inputs["NCapacityReserveMargin"]
         @expression(EP, eCapResMarBalanceThermal[capres in 1:ncapres, t in 1:T],
-            sum(
-                derating_factor(gen[y], tag = capres) * EP[:eTotalCap][y]
-                for y in THERM_ALL
-            )
-        )
+            sum(capresfactor[y, capres] * EP[:eTotalCap][y]
+            for y in THERM_ALL))
         add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceThermal)
 
         if !isempty(intersect(MAINT, THERM_COMMIT))
@@ -47,11 +45,12 @@ function thermal!(EP::Model, inputs::Dict, setup::Dict)
         if !isempty(intersect(FUSION, THERM_COMMIT))
             fusion_capacity_reserve_margin_adjustment!(EP, inputs)
         end
+
     elseif setup["CapacityReserveMargin"] == 2
         ncapres = inputs["NCapacityReserveMargin"]
         @expression(EP, eCapResMarBalanceThermal[capres in 1:ncapres, t in 1:1],
             sum(
-                derating_factor(gen[y], tag = capres) * EP[:eTotalCap][y]
+                capresfactor[y, capres] * EP[:eTotalCap][y]
                 for y in THERM_ALL
             )
         )

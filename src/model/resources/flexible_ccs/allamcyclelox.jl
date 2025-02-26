@@ -239,10 +239,12 @@ function allamcyclelox!(EP::Model, inputs::Dict, setup::Dict)
 
     # Expressions related to policies
     # Capacity Reserves Margin policy
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
+        nCRMZones = inputs["NCapacityReserveMargin"]
+        capresfactor = inputs["DERATING_FACTOR"]
         @expression(EP,
-            eCapResMarBalanceAllam[res = 1:inputs["NCapacityReserveMargin"], t = 1:T],
-            sum(derating_factor(gen[y], tag = res) * (eP_Allam[y, t]-vCHARGE_ALLAM[y,t]) for y in ALLAM_CYCLE_LOX))
+            eCapResMarBalanceAllam[res = 1:nCRMZones, t = 1:T],
+            sum(capresfactor[y, res] * (eP_Allam[y, t]-vCHARGE_ALLAM[y,t]) for y in ALLAM_CYCLE_LOX))
         add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceAllam)
     end
 

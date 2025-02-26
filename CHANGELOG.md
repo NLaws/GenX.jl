@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New resource type: Allam Cycle with Oxygen Storage (#772).
+- Caching of `derating_factor` to improve performance in model generation (#834).
 
 ## [0.4.4] - 2025-02-04
 
