@@ -72,7 +72,12 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
     Z = inputs["Z"]     # Number of zones
 
     # Generate Energy Portfolio (EP) Model
-    EP = Model(OPTIMIZER)
+    EP = if Bool(setup["EnableJuMPDirectModel"])
+        opt_instance = MOI.instantiate(OPTIMIZER)
+        direct_model(opt_instance)
+    else
+        Model(OPTIMIZER)
+    end
     set_string_names_on_creation(EP, Bool(setup["EnableJuMPStringNames"]))
 
     # Initialize Power Balance Expression
