@@ -95,10 +95,13 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
 
     ## Power Balance Expressions ##
 
+    STOR_ALL_BY_ZONE = map(1:Z) do z
+        return intersect(STOR_ALL, resources_in_zone_by_rid(gen, z))
+    end
     # Term to represent net dispatch from storage in any period
     @expression(EP, ePowerBalanceStor[t = 1:T, z = 1:Z],
         sum(vP[y, t] - vCHARGE[y, t]
-        for y in intersect(resources_in_zone_by_rid(gen, z), STOR_ALL)))
+        for y in STOR_ALL_BY_ZONE[z]))
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceStor)
 
     ### Constraints ###
@@ -136,9 +139,11 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
 
     # Hourly matching constraints
     if HourlyMatching == 1
+        QUALIFIED_STOR_ALL_BY_ZONE = map(1:Z) do z
+            return intersect(QUALIFIED_SUPPLY, STOR_ALL, resources_in_zone_by_rid(gen, z))
+        end
         @expression(EP, eHMCharge[t = 1:T, z = 1:Z],
-            -sum(vCHARGE[y, t]
-            for y in intersect(resources_in_zone_by_rid(gen, z), QUALIFIED_SUPPLY, STOR_ALL)))
+            -sum(vCHARGE[y, t] for y in QUALIFIED_STOR_ALL_BY_ZONE[z]))
         add_similar_to_expression!(EP[:eHM], eHMCharge)
     end
 
