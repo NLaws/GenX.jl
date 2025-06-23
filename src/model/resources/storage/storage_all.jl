@@ -80,7 +80,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
             eTotalCVarInT_virtual[t = 1:T],
             sum(eCVar_in_virtual[y, t] for y in STOR_ALL))
         @expression(EP, eTotalCVarIn_virtual, sum(eTotalCVarInT_virtual[t] for t in 1:T))
-        EP[:eObj] += eTotalCVarIn_virtual
+        add_to_expression!(EP[:eObj], eTotalCVarIn_virtual)
 
         #Variable costs of "virtual discharging" for technologies "y" during hour "t" in zone "z"
         @expression(EP,
@@ -90,7 +90,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
             eTotalCVarOutT_virtual[t = 1:T],
             sum(eCVar_out_virtual[y, t] for y in STOR_ALL))
         @expression(EP, eTotalCVarOut_virtual, sum(eTotalCVarOutT_virtual[t] for t in 1:T))
-        EP[:eObj] += eTotalCVarOut_virtual
+        add_to_expression!(EP[:eObj], eTotalCVarOut_virtual)
     end
 
     ## Power Balance Expressions ##
@@ -239,8 +239,8 @@ function storage_all_operation!(EP::Model, inputs::Dict, setup::Dict)
         # Maximum charging rate plus contribution to reserves up must be greater than zero
         # Note: when charging, reducing charge rate is contributing to upwards reserve & regulation as it drops net demand
         expr = extract_time_series_to_expression(vCHARGE, STOR_ALL)
-        add_similar_to_expression!(expr[STOR_REG, :], -vREG_charge[STOR_REG, :])
-        add_similar_to_expression!(expr[STOR_RSV, :], -vRSV_charge[STOR_RSV, :])
+        add_similar_to_expression!(expr[STOR_REG, :], -1.0, vREG_charge[STOR_REG, :])
+        add_similar_to_expression!(expr[STOR_RSV, :], -1.0, vRSV_charge[STOR_RSV, :])
         @constraint(EP, [y in STOR_ALL, t in 1:T], expr[y, t]>=0)
 
         # Maximum charging rate plus contribution to regulation down must be less than available storage capacity
