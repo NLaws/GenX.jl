@@ -22,6 +22,8 @@ Models running with, non-default, solvers Cbc and Clp will fail unless
 ### Changed
 - Replace `+=` and `-=` with `add_to_expression!` and `add_similar_to_expression!`
 in several modules to improve performance (#826).
+- Separate myopic logic and DDP logic in the GenX multi-stage code into distinct 
+functions (#810).
 
 ## [0.4.4] - 2025-02-04
 
