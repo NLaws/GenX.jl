@@ -167,8 +167,6 @@ function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimize
     validate_can_retire_multistage(
         inputs_dict, mysetup["MultiStageSettingsDict"]["NumStages"])
 
-
-
     # Prepare folder for results    
     outpath = get_default_output_folder(case)
 
