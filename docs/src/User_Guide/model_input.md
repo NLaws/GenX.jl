@@ -761,8 +761,6 @@ parameter CapacityReserveMargin is 1 or 2 in the YAML file `genx_settings.yml`.
 Note: this file should use the same region name as specified in the resource `.csv` file (inside the
 `Resource`).
 
-See also (Capacity Reserve Margin Slack)(@ref).
-
 ###### Table 25: Structure of the Capacity\_reserve\_margin.csv file
 ---
 |**Column Name** | **Description**|

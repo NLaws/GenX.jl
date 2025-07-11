@@ -8,7 +8,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     println("Storage Core Resources Module")
 
     gen = inputs["RESOURCES"]
-    CapacityReserveMargin = setup["CapacityReserveMargin"] > 0
+    CapacityReserveMargin = setup["CapacityReserveMargin"] == 1
     HourlyMatching = setup["HourlyMatching"]
 
     virtual_discharge_cost = inputs["VirtualChargeDischargeCost"]
@@ -39,7 +39,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     # Energy withdrawn from grid by resource "y" at hour "t" [MWh] on zone "z"
     @variable(EP, vCHARGE[y in STOR_ALL, t = 1:T]>=0)
 
-    if CapacityReserveMargin == 1
+    if CapacityReserveMargin
         # Virtual discharge contributing to capacity reserves at timestep t for storage cluster y
         @variable(EP, vCAPRES_discharge[y in STOR_ALL, t = 1:T]>=0)
 
@@ -71,7 +71,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     @expression(EP, eTotalCVarIn, sum(eTotalCVarInT[t] for t in 1:T))
     add_to_expression!(EP[:eObj], eTotalCVarIn)
 
-    if CapacityReserveMargin == 1
+    if CapacityReserveMargin
         #Variable costs of "virtual charging" for technologies "y" during hour "t" in zone "z"
         @expression(EP,
             eCVar_in_virtual[y in STOR_ALL, t = 1:T],
@@ -163,7 +163,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:eELOSSByZone], expr)
 
     # Capacity Reserve Margin policy
-    if CapacityReserveMargin == 1
+    if CapacityReserveMargin
         # Constraints governing energy held in reserve when storage makes virtual capacity reserve margin contributions:
 
         # Links energy held in reserve in first time step with decisions in last time step of each subperiod
