@@ -71,9 +71,6 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
     T = inputs["T"]     # Number of time steps (hours)
     Z = inputs["Z"]     # Number of zones
 
-    ## Start pre-solve timer
-    presolver_start_time = time()
-
     # Generate Energy Portfolio (EP) Model
     EP = Model(OPTIMIZER)
     set_string_names_on_creation(EP, Bool(setup["EnableJuMPStringNames"]))
@@ -91,15 +88,17 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
     create_empty_expression!(EP, :eELOSSByZone, Z)
 
     # Initialize Capacity Reserve Margin Expression
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         create_empty_expression!(EP,
             :eCapResMarBalance,
-            (inputs["NCapacityReserveMargin"], T))
-    end
-
-    # Energy Share Requirement
-    if setup["EnergyShareRequirement"] >= 1
-        create_empty_expression!(EP, :eESR, inputs["nESR"])
+            (inputs["NCapacityReserveMargin"], T)
+        )
+    elseif setup["CapacityReserveMargin"] == 2
+        # don't need the time index but we keep it for compatibility in other methods
+        create_empty_expression!(EP,
+            :eCapResMarBalance,
+            (inputs["NCapacityReserveMargin"], 1)
+        )
     end
 
     # Hourly Matching Requirement
@@ -247,6 +246,14 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
         mga!(EP, inputs, setup)
     end
 
+    if setup["Market"] == 1
+        add_known_price_market_model!(EP, inputs, setup)
+    end
+
+    if setup["LimitNG_To40CF"] == 1
+        limit_ng_techs_to_40_cap_factor(EP, inputs, setup)
+    end
+
     ## Define the objective function
     @objective(EP, Min, setup["ObjScale"]*EP[:eObj])
 
@@ -257,8 +264,6 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
         cPowerBalance[t = 1:T, z = 1:Z],
         EP[:ePowerBalance][t, z]==inputs["pD"][t, z])
 
-    ## Record pre-solver time
-    presolver_time = time() - presolver_start_time
     if setup["PrintModel"] == 1
         filepath = joinpath(pwd(), "YourModel.lp")
         JuMP.write_to_file(EP, filepath)

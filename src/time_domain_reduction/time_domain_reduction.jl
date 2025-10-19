@@ -39,12 +39,38 @@ function rmse_score(y_true, y_pred)
 end
 
 @doc raw"""
-    parse_data(myinputs)
+    parse_market_data(myinputs:Dict)
 
-Get demand, solar, wind, and other curves from the input data.
-
+Extract the market time series and their column names to perform TDR on.
 """
-function parse_data(myinputs)
+function parse_market_data(myinputs::Dict)
+
+    # Market_data.csv
+    price_profiles = []
+    price_col_names = []
+    
+    M = length(myinputs[MARKET_LIMITS])  # number of market price tiers
+    price_profiles = [myinputs[MARKET_PRICES][m] for m in 1:M]
+    price_col_names = ["price_per_MWh_" * string(m) for m in 1:M]
+
+    price_profiles, price_col_names
+end
+
+
+function add_market_limits_back!(df::DataFrames.DataFrame, myinputs::Dict)
+    limit_columns = ["import_limit_MW_" * string(m) for m=1:length(myinputs[MARKET_LIMITS])]
+    for (col, val) in zip(limit_columns, myinputs[MARKET_LIMITS])
+        df[!, col] = vcat([val], fill(missing, nrow(df) - 1))
+    end
+end
+
+
+@doc raw"""
+    parse_data(myinputs:Dict)
+
+Get demand, solar, wind, and other curves from the input data created by load_inputs.
+"""
+function parse_data(myinputs::Dict)
     # Assumes no missing data
     RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
     ZONES = myinputs["R_ZONES"]
@@ -53,7 +79,6 @@ function parse_data(myinputs)
     demand_profiles = [myinputs["pD"][:, l] for l in 1:size(myinputs["pD"], 2)]
     demand_col_names = [DEMAND_COLUMN_PREFIX() * string(l)
                         for l in 1:size(demand_profiles)[1]]
-    demand_zones = [l for l in 1:size(demand_profiles)[1]]
     col_to_zone_map = Dict(demand_col_names .=> 1:length(demand_col_names))
 
     # CAPACITY FACTORS - Generators_variability.csv
@@ -90,6 +115,7 @@ function parse_data(myinputs)
             AllFuelsConst = false
         end
     end
+
     all_col_names = [demand_col_names; var_col_names; fuel_col_names]
     all_profiles = [demand_profiles..., var_profiles..., fuel_profiles...]
     return demand_col_names,
@@ -99,6 +125,7 @@ function parse_data(myinputs)
     all_profiles,
     col_to_zone_map, AllFuelsConst
 end
+
 
 @doc raw"""
     parse_mutli_period_data(inputs_dict)
@@ -133,7 +160,6 @@ function parse_multi_stage_data(inputs_dict)
     demand_profiles = [reduce(vcat, vector_lps[l]) for l in 1:size(inputs_dict[1]["pD"], 2)]
     demand_col_names = [DEMAND_COLUMN_PREFIX() * string(l)
                         for l in 1:size(demand_profiles)[1]]
-    demand_zones = [l for l in 1:size(demand_profiles)[1]]
     col_to_zone_map = Dict(demand_col_names .=> 1:length(demand_col_names))
 
     # CAPACITY FACTORS - Generators_variability.csv
@@ -240,7 +266,7 @@ function cluster(ClusterMethod,
         NClusters,
         nIters,
         v = false,
-        random = true)
+        random = false)
     if ClusterMethod == "kmeans"
         DistMatrix = pairwise(Euclidean(), Matrix(ClusteringInputDF), dims = 2)
         R = kmeans(Matrix(ClusteringInputDF), NClusters, init = :kmcen)
@@ -300,12 +326,12 @@ function cluster(ClusterMethod,
 end
 
 @doc raw"""
-    RemoveConstCols(all_profiles, all_col_names)
+    remove_constant_columns(all_profiles, all_col_names)
 
 Remove and store the columns that do not vary during the period.
 
 """
-function RemoveConstCols(all_profiles, all_col_names, v = false)
+function remove_constant_columns(all_profiles, all_col_names, v = false)
     ConstData = []
     ConstIdx = []
     ConstCols = []
@@ -322,7 +348,7 @@ function RemoveConstCols(all_profiles, all_col_names, v = false)
     end
     all_profiles = [all_profiles[i] for i in 1:length(all_profiles) if i ∉ ConstIdx]
     all_col_names = [all_col_names[i] for i in 1:length(all_col_names) if i ∉ ConstIdx]
-    return all_profiles, all_col_names, ConstData, ConstCols, ConstIdx
+    return all_profiles, all_col_names, ConstData, ConstCols
 end
 
 @doc raw"""
@@ -409,7 +435,7 @@ function get_integral_extreme(GDF, statKey, col_names, ConstCols)
         (stat, stat_idx) = findmin(sum([GDF[!, Symbol(c)]
                                         for c in setdiff(col_names, ConstCols)]))
     else
-        println("Error: Statistic Key ", statKey, " is invalid. Choose `Max' or `Min'.")
+        throw(@error("Statistic Key $statKey is invalid. Choose `Max' or `Min'."))
     end
     return (stat, stat_idx)
 end
@@ -431,7 +457,7 @@ function get_absolute_extreme(DF, statKey, col_names, ConstCols)
                                         for c in setdiff(col_names, ConstCols)]))
         group_idx = DF.Group[stat_idx]
     else
-        println("Error: Statistic Key ", statKey, " is invalid. Choose `Max' or `Min'.")
+        throw(@error("Statistic Key $statKey is invalid. Choose `Max' or `Min'."))
     end
     return (stat, group_idx)
 end
@@ -637,21 +663,21 @@ to separate Vre_and_stor_solar_variability.csv and Vre_and_stor_wind_variability
 and wind profiles for co-located resources will be separated into different CSV files to be read by loading the inputs 
 after the clustering of the inputs has occurred. 
 """
-function cluster_inputs(inpath,
+function cluster_inputs(
+        inpath,
         settings_path,
         mysetup,
         stage_id = -99,
         v = false;
-        random = true)
-    if v
-        println(now())
-    end
+        random = false,
+    )
 
     ##### Step 0: Load in settings and data
 
     # Read time domain reduction settings file time_domain_reduction_settings.yml
-    myTDRsetup = YAML.load(open(joinpath(settings_path,
-        "time_domain_reduction_settings.yml")))
+    myTDRsetup = YAML.load(
+        open(joinpath(settings_path, "time_domain_reduction_settings.yml"))
+    )
     update_deprecated_tdr_inputs!(myTDRsetup)
 
     # Accept model parameters from the settings file time_domain_reduction_settings.yml
@@ -680,6 +706,7 @@ function cluster_inputs(inpath,
     Demand_Outfile = joinpath(TimeDomainReductionFolder, "Demand_data.csv")
     GVar_Outfile = joinpath(TimeDomainReductionFolder, "Generators_variability.csv")
     Fuel_Outfile = joinpath(TimeDomainReductionFolder, "Fuels_data.csv")
+    Market_Outfile = joinpath(TimeDomainReductionFolder, "Market_data.csv")
     PMap_Outfile = joinpath(TimeDomainReductionFolder, "Period_map.csv")
     YAML_Outfile = joinpath(TimeDomainReductionFolder, "time_domain_reduction_settings.yml")
 
@@ -694,32 +721,35 @@ function cluster_inputs(inpath,
     mysetup_MS["DoNotReadPeriodMap"] = 1
     mysetup_MS["ParameterScale"] = 0
 
+    market_col_names = []
+
     if MultiStage == 1
-        model_dict = Dict()
         inputs_dict = Dict()
-        for t in 1:NumStages
 
-            # Step 0) Set Model Year
-            mysetup["MultiStageSettingsDict"]["CurStage"] = t
-
-            # Step 1) Load Inputs
-            global inpath_sub = string("$inpath/inputs/inputs_p", t)
-
-            # this prevents doubled time domain reduction in stages past
-            # the first, even if the first stage is okay.
-            prevent_doubled_timedomainreduction(joinpath(inpath_sub,
-                mysetup["SystemFolder"]))
-
-            inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
-
-            inputs_dict[t] = configure_multi_stage_inputs(inputs_dict[t],
-                mysetup["MultiStageSettingsDict"],
-                mysetup["NetworkExpansion"])
-        end
         if MultiStageConcatenate == 1
-            if v
-                println("MultiStage with Concatenation")
+            # TODO in most cases we do not need all of the inputs?
+            for t in 1:NumStages
+    
+                # Step 0) Set Model Year
+                mysetup["MultiStageSettingsDict"]["CurStage"] = t
+    
+                # Step 1) Load Inputs
+                global inpath_sub = string("$inpath/inputs/inputs_p", t)
+    
+                # this prevents doubled time domain reduction in stages past
+                # the first, even if the first stage is okay.
+                prevent_doubled_timedomainreduction(joinpath(inpath_sub,
+                    mysetup["SystemFolder"]))
+    
+                inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
+    
+                inputs_dict[t] = configure_multi_stage_inputs(
+                    inputs_dict[t],
+                    mysetup["MultiStageSettingsDict"],
+                    mysetup["NetworkExpansion"]
+                )
             end
+    
             RESOURCE_ZONES = inputs_dict[1]["RESOURCE_ZONES"]
             RESOURCES = inputs_dict[1]["RESOURCE_NAMES"]
             ZONES = inputs_dict[1]["R_ZONES"]
@@ -728,13 +758,28 @@ function cluster_inputs(inpath,
             demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst, stage_lengths, total_length, relative_lengths = parse_multi_stage_data(inputs_dict)
-        else # TDR each period individually
-            if v
-                println("MultiStage without Concatenation")
+
+            if MARKET_PRICES in keys(myinputs)
+                throw(@error "TDR with MultiStageConcatenate = 1 not implemented for Market = 1")
             end
-            if v
-                println("---> STAGE ", stage_id)
-            end
+
+        else # TDR each period individually (MultiStageConcatenate == 0)
+            t = stage_id
+            # Step 0) Set Model Year
+            mysetup["MultiStageSettingsDict"]["CurStage"] = t
+            # Step 1) Load Inputs
+            global inpath_sub = string("$inpath/inputs/inputs_p", t)
+            # this prevents doubled time domain reduction in stages past
+            # the first, even if the first stage is okay.
+            prevent_doubled_timedomainreduction(
+                joinpath(inpath_sub, mysetup["SystemFolder"])
+            )
+
+            inputs_dict[t] = load_inputs(mysetup_MS, inpath_sub)
+            inputs_dict[t] = configure_multi_stage_inputs(inputs_dict[t],
+                mysetup["MultiStageSettingsDict"],
+                mysetup["NetworkExpansion"])
+    
             myinputs = inputs_dict[stage_id]
             RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
             RESOURCES = myinputs["RESOURCE_NAMES"]
@@ -744,11 +789,14 @@ function cluster_inputs(inpath,
             demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
             demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
             col_to_zone_map, AllFuelsConst = parse_data(myinputs)
+
+            if MARKET_PRICES in keys(myinputs)  # TODO repeated code into method
+                price_profiles, market_col_names = parse_market_data(myinputs)
+                all_col_names = vcat(all_col_names, market_col_names)
+                all_profiles = [all_profiles..., price_profiles...]
+            end
         end
-    else
-        if v
-            println("Not MultiStage")
-        end
+    else  # single stage
         myinputs = load_inputs(mysetup_local, inpath)
         RESOURCE_ZONES = myinputs["RESOURCE_ZONES"]
         RESOURCES = myinputs["RESOURCE_NAMES"]
@@ -758,16 +806,32 @@ function cluster_inputs(inpath,
         demand_col_names, var_col_names, solar_col_names, wind_col_names, fuel_col_names, all_col_names,
         demand_profiles, var_profiles, solar_profiles, wind_profiles, fuel_profiles, all_profiles,
         col_to_zone_map, AllFuelsConst = parse_data(myinputs)
-    end
-    if v
-        println()
+
+        if MARKET_PRICES in keys(myinputs)
+            price_profiles, market_col_names = parse_market_data(myinputs)
+            all_col_names = vcat(all_col_names, market_col_names)
+            all_profiles = [all_profiles..., price_profiles...]
+        end
     end
 
-    # Remove Constant Columns - Add back later in final output
-    all_profiles, all_col_names, ConstData, ConstCols, ConstIdx = RemoveConstCols(
+
+    # Remove Constant Columns - Add back later in final output by repeating the first value in
+    # ConstData in every reduced time step
+    all_profiles, all_col_names, ConstData, ConstCols = remove_constant_columns(
         all_profiles,
         all_col_names,
         v)
+        
+    if length(all_profiles) == 0
+        throw(@error(
+            "Time domain reduction is not implemented for time series that are all constant."
+        ))
+    end
+    if !(all(c in all_col_names for c in demand_col_names))
+        throw(@error(
+            "Time domain reduction is not implemented for constant demand profiles."
+        ))
+    end
 
     # Determine whether or not to time domain reduce fuel profiles as well based on user choice and file structure (i.e., variable fuels in Fuels_data.csv)
     IncludeFuel = true
@@ -776,8 +840,9 @@ function cluster_inputs(inpath,
     end
 
     # Put it together!
-    InputData = DataFrame(Dict(all_col_names[c] => all_profiles[c]
-    for c in 1:length(all_col_names)))
+    InputData = DataFrame(Dict(
+        all_col_names[c] => all_profiles[c] for c in 1:length(all_col_names)
+    ))
     InputData = convert.(Float64, InputData)
     if v
         println("Demand (MW) and Capacity Factor Profiles: ")
@@ -815,14 +880,14 @@ function cluster_inputs(inpath,
     end
 
     # Compile newly normalized/standardized profiles
-    AnnualTSeriesNormalized = DataFrame(Dict(OldColNames[c] => normProfiles[c]
-    for c in 1:length(OldColNames)))
+    AnnualTSeriesNormalized = DataFrame(Dict(
+        OldColNames[c] => normProfiles[c] for c in 1:length(OldColNames)
+    ))
 
     # Optional pre-scaling of demand in order to give it more preference in clutering algorithm
     if DemandWeight != 1   # If we want to value demand more/less than capacity factors. Assume nonnegative. LW=1 means no scaling.
         for c in demand_col_names
-            AnnualTSeriesNormalized[!, Symbol(c)] .= AnnualTSeriesNormalized[!,
-                Symbol(c)] .* DemandWeight
+            AnnualTSeriesNormalized[!, Symbol(c)] .= AnnualTSeriesNormalized[!, Symbol(c)] .* DemandWeight
         end
     end
 
@@ -835,15 +900,16 @@ function cluster_inputs(inpath,
     ##### STEP 2: Identify extreme periods in the model, Reshape data for clustering
 
     # Total number of subperiods available in the dataset, where each subperiod length = TimestepsPerRepPeriod
-    NumDataPoints = Nhours ÷ TimestepsPerRepPeriod # 364 weeks in 7 years
+    NumSubPeriods = Nhours ÷ TimestepsPerRepPeriod # 364 weeks in 7 years
     if v
-        println("Total Subperiods in the data set: ", NumDataPoints)
+        println("Total Subperiods in the data set: ", NumSubPeriods)
     end
-    InputData[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1    # Group col identifies the subperiod ID of each hour (e.g., all hours in week 2 have Group=2 if using TimestepsPerRepPeriod=168)
+    # Group col identifies the subperiod ID of each hour (e.g., all hours in week 2 have Group=2 if using TimestepsPerRepPeriod=168)
+    InputData[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1    
 
     # Group by period (e.g., week)
     cgdf = combine(groupby(InputData, :Group), [c .=> sum for c in OldColNames])
-    cgdf = cgdf[setdiff(1:end, NumDataPoints + 1), :]
+    cgdf = cgdf[setdiff(1:end, NumSubPeriods + 1), :]
     rename!(cgdf, [:Group; Symbol.(OldColNames)])
 
     # Extreme period identification based on user selection in time_domain_reduction_settings.yml
@@ -940,29 +1006,26 @@ function cluster_inputs(inpath,
     ### DATA MODIFICATION - Shifting InputData and Normalized InputData
     #    from 8760 (# hours) by n (# profiles) DF to
     #    168*n (n period-stacked profiles) by 52 (# periods) DF
-    DFsToConcat = [stack(InputData[isequal.(InputData.Group, w), :], OldColNames)[!,
-                       :value] for w in 1:NumDataPoints if w <= NumDataPoints]
-    ModifiedData = DataFrame(Dict(Symbol(i) => DFsToConcat[i] for i in 1:NumDataPoints))
+    DFsToConcat = [
+        stack(InputData[isequal.(InputData.Group, w), :], OldColNames)[!,:value] 
+        for w in 1:NumSubPeriods
+    ]
+    ModifiedData = DataFrame(Dict(Symbol(i) => DFsToConcat[i] for i in 1:NumSubPeriods))
 
-    AnnualTSeriesNormalized[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+
-                                          1
-    DFsToConcatNorm = [stack(
-                           AnnualTSeriesNormalized[
-                               isequal.(AnnualTSeriesNormalized.Group,
-                                   w),
-                               :],
-                           OldColNames)[!,
-                           :value] for w in 1:NumDataPoints if w <= NumDataPoints]
-    ModifiedDataNormalized = DataFrame(Dict(Symbol(i) => DFsToConcatNorm[i]
-    for i in 1:NumDataPoints))
+    AnnualTSeriesNormalized[:, :Group] .= (1:Nhours) .÷ (TimestepsPerRepPeriod + 0.0001) .+ 1
+    DFsToConcatNorm = [
+        stack(AnnualTSeriesNormalized[isequal.(AnnualTSeriesNormalized.Group, w), :], OldColNames)[!,:value] 
+        for w in 1:NumSubPeriods
+    ]
+    ModifiedDataNormalized = DataFrame(
+        Dict(Symbol(i) => DFsToConcatNorm[i] for i in 1:NumSubPeriods)
+    )
 
     # Remove extreme periods from normalized data before clustering
     NClusters = MinPeriods
     if UseExtremePeriods == 1
         if v
             println("Pre-removal: ", names(ModifiedDataNormalized))
-        end
-        if v
             println("Extreme Periods: ", string.(ExtremeWksList))
         end
         ClusteringInputDF = select(ModifiedDataNormalized, Not(string.(ExtremeWksList)))
@@ -979,7 +1042,8 @@ function cluster_inputs(inpath,
 
     # Cluster once regardless of iteration decisions
     push!(cluster_results,
-        cluster(ClusterMethod, ClusteringInputDF, NClusters, nReps, v, random))
+        cluster(ClusterMethod, ClusteringInputDF, NClusters, nReps, v, random)
+    )
 
     # Iteratively add worst periods as extreme periods OR increment number of clusters k
     #    until threshold is met or maximum periods are added (If chosen in inputs)
@@ -1010,12 +1074,12 @@ function cluster_inputs(inpath,
                 push!(cluster_results,
                     cluster(ClusterMethod, ClusteringInputDF, NClusters, nReps, v, random))
             elseif IterateMethod == "extreme"
-                println("INVALID IterateMethod ",
+                @error("INVALID IterateMethod ",
                     IterateMethod,
                     " because UseExtremePeriods is off. Set to 1 if you wish to add extreme periods.")
                 break
             else
-                println("INVALID IterateMethod ",
+                @error("INVALID IterateMethod ",
                     IterateMethod,
                     ". Choose 'cluster' or 'extreme'.")
                 break
@@ -1033,7 +1097,6 @@ function cluster_inputs(inpath,
     A = last(cluster_results)[2]  # Assignments
     W = last(cluster_results)[3]  # Weights
     M = last(cluster_results)[4]  # Centers or Medoids
-    DistMatrix = last(cluster_results)[5]  # Pairwise distances
     if v
         println("Total Groups Assigned to Each Cluster: ", W)
         println("Sum Cluster Weights: ", sum(W))
@@ -1111,6 +1174,7 @@ function cluster_inputs(inpath,
     DemandCols = Symbol.(demand_col_names)
     VarCols = [Symbol(var_col_names[i]) for i in 1:length(var_col_names)]
     FuelCols = [Symbol(fuel_col_names[i]) for i in 1:length(fuel_col_names)]
+    MarketCols = [Symbol(market_col_names[i]) for i in 1:length(market_col_names)]
     ConstCol_Syms = [Symbol(ConstCols[i]) for i in 1:length(ConstCols)]
 
     # Cluster Ouput: The original data at the medoids/centers
@@ -1135,20 +1199,36 @@ function cluster_inputs(inpath,
     gvDFs = [] # Generators Variability DataFrames - Just Resource Profiles
     dmDFs = [] # Demand Profile DataFrames - Just Demand Profiles
     fpDFs = [] # Fuel Profile DataFrames - Just Fuel Profiles
+    marketDFs = [] # Market DataFrames
 
     for m in 1:NClusters
-        rpDF = DataFrame(Dict(NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
-        for i in 1:Ncols))
-        gvDF = DataFrame(Dict(NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
-        for i in 1:Ncols if (Symbol(NewColNames[i]) in VarCols)))
-        dmDF = DataFrame(Dict(NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
-        for i in 1:Ncols if (Symbol(NewColNames[i]) in DemandCols)))
+        rpDF = DataFrame(Dict(
+            NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
+            for i in 1:Ncols
+        ))
+        gvDF = DataFrame(Dict(
+            NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
+            for i in 1:Ncols if (Symbol(NewColNames[i]) in VarCols)
+        ))
+        dmDF = DataFrame(Dict(
+            NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
+            for i in 1:Ncols if (Symbol(NewColNames[i]) in DemandCols)
+        ))
         if IncludeFuel
-            fpDF = DataFrame(Dict(NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
-            for i in 1:Ncols if (Symbol(NewColNames[i]) in FuelCols)))
-        end
-        if !IncludeFuel
+            fpDF = DataFrame(Dict(
+                NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
+                for i in 1:Ncols if (Symbol(NewColNames[i]) in FuelCols))
+            )
+        else
             fpDF = DataFrame(Placeholder = 1:TimestepsPerRepPeriod)
+        end
+        if MARKET_PRICES in keys(myinputs)
+            market_df = DataFrame(Dict(
+                NewColNames[i] => ClusterOutputData[!, m][(TimestepsPerRepPeriod * (i - 1) + 1):(TimestepsPerRepPeriod * i)]
+                for i in 1:Ncols if Symbol(NewColNames[i]) in MarketCols
+            ))
+        else
+            market_df = DataFrame(Placeholder = 1:TimestepsPerRepPeriod)
         end
 
         # Add Constant Columns back in
@@ -1160,11 +1240,17 @@ function cluster_inputs(inpath,
                 fpDF[!, Symbol(ConstCols[c])] .= ConstData[c][1]
             elseif Symbol(ConstCols[c]) in DemandCols
                 dmDF[!, Symbol(ConstCols[c])] .= ConstData[c][1]
+            elseif Symbol(ConstCols[c]) in MarketCols
+                market_df[!, Symbol(ConstCols[c])] .= ConstData[c][1]
             end
         end
         if !IncludeFuel
             select!(fpDF, Not(:Placeholder))
         end
+        if !(MARKET_PRICES in keys(myinputs))
+            select!(market_df, Not(:Placeholder))
+        end
+
 
         # Scale Demand using previously identified multipliers
         #   Scale dmDF but not rpDF which compares to input data but is not written to file.
@@ -1182,15 +1268,23 @@ function cluster_inputs(inpath,
         push!(gvDFs, gvDF)
         push!(dmDFs, dmDF)
         push!(fpDFs, fpDF)
+        push!(marketDFs, market_df)
     end
+
     FinalOutputData = vcat(rpDFs...)  # For comparisons with input data to evaluate clustering process
     GVOutputData = vcat(gvDFs...)     # Generators Variability
     DMOutputData = vcat(dmDFs...)     # Demand Profiles
     FPOutputData = vcat(fpDFs...)     # Fuel Profiles
+    MarketOutputData = vcat(marketDFs...)
+
+    if MARKET_PRICES in keys(myinputs)
+        add_market_limits_back!(MarketOutputData, myinputs)
+    end
+
 
     ##### Step 5: Evaluation
 
-    InputDataTest = InputData[(InputData.Group .<= NumDataPoints * 1.0), :]
+    InputDataTest = InputData[(InputData.Group .<= NumSubPeriods * 1.0), :]
     ClusterDataTest = vcat([rpDFs[a] for a in A]...) # To compare fairly, demand is not scaled here
     RMSE = Dict(c => rmse_score(InputDataTest[:, c], ClusterDataTest[:, c])
     for c in OldColNames)
@@ -1198,13 +1292,7 @@ function cluster_inputs(inpath,
     ##### Step 6: Print to File
 
     if MultiStage == 1
-        if v
-            print("Outputs: MultiStage")
-        end
         if MultiStageConcatenate == 1
-            if v
-                println(" with Concatenation")
-            end
             groups_per_stage = round.(Int, size(A, 1) * relative_lengths)
             group_ranges = [if i == 1
                                 1:groups_per_stage[1]
@@ -1248,6 +1336,9 @@ function cluster_inputs(inpath,
                         SolarVar_Outfile)
                     Stage_Outfiles[per]["GWind"] = joinpath("inputs_p$per", WindVar_Outfile)
                 end
+                if MARKET_PRICES in keys(myinputs)
+                    Stage_Outfiles[per]["Market"] = joinpath("inputs_p$per", Market_Outfile)
+                end
 
                 # Save output data to stage-specific locations
                 ### TDR_Results/Demand_data_clustered.csv
@@ -1276,8 +1367,7 @@ function cluster_inputs(inpath,
                 if v
                     println("Writing demand file...")
                 end
-                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["Demand"]),
-                    demand_in)
+                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["Demand"]), demand_in)
 
                 ### TDR_Results/Generators_variability.csv
                 # Reset column ordering, add time index, and solve duplicate column name trouble with CSV.write's header kwarg
@@ -1348,42 +1438,41 @@ function cluster_inputs(inpath,
                 if v
                     println("Writing fuel profiles...")
                 end
-                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["Fuel"]),
-                    NewFuelOutput)
+                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["Fuel"]), NewFuelOutput)
 
                 ### TDR_Results/Period_map.csv
                 if v
                     println("Writing period map...")
                 end
-                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["PMap"]),
-                    Stage_PeriodMaps[per])
+                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["PMap"]), Stage_PeriodMaps[per])
+
+
+                ### TDR_Results/Market_data.csv
+                CSV.write(joinpath(inpath, "inputs", Stage_Outfiles[per]["Market"]), Stage_PeriodMaps[per])
 
                 ### TDR_Results/time_domain_reduction_settings.yml
                 if v
                     println("Writing .yml settings...")
                 end
-                YAML.write_file(joinpath(inpath, "inputs", Stage_Outfiles[per]["YAML"]),
-                    myTDRsetup)
+                YAML.write_file(joinpath(inpath, "inputs", Stage_Outfiles[per]["YAML"]), myTDRsetup)
             end
 
         else
-            if v
-                print("without Concatenation has not yet been fully implemented. ")
-            end
-            if v
-                println("( STAGE ", stage_id, " )")
-            end
+            @warn("without Concatenation has not yet been fully implemented. TBD what that means.")
             input_stage_directory = "inputs_p" * string(stage_id)
-            mkpath(joinpath(inpath,
+            mkpath(joinpath(
+                inpath,
                 "inputs",
                 input_stage_directory,
-                TimeDomainReductionFolder))
+                TimeDomainReductionFolder
+            ))
 
             ### TDR_Results/Demand_data.csv
             demand_in = get_demand_dataframe(joinpath(inpath,
                 "inputs",
                 input_stage_directory,
-                mysetup["SystemFolder"]))
+                mysetup["SystemFolder"]
+            ))
             demand_in[!, :Sub_Weights] = demand_in[!, :Sub_Weights] * 1.0
             demand_in[1:length(W), :Sub_Weights] .= W
             demand_in[!, :Rep_Periods][1] = length(W)
@@ -1479,7 +1568,6 @@ function cluster_inputs(inpath,
             end
 
             ### TDR_Results/Fuels_data.csv
-
             fuel_in = load_dataframe(joinpath(inpath,
                 "inputs",
                 input_stage_directory,
@@ -1491,31 +1579,28 @@ function cluster_inputs(inpath,
             NewFuelOutput = vcat(SepFirstRow, FPOutputData)
             rename!(NewFuelOutput, FuelCols)
             insertcols!(NewFuelOutput, 1, :Time_Index => 0:(size(NewFuelOutput, 1) - 1))
-            if v
-                println("Writing fuel profiles...")
-            end
             CSV.write(joinpath(inpath, "inputs", input_stage_directory, Fuel_Outfile),
                 NewFuelOutput)
 
             ### Period_map.csv
-            if v
-                println("Writing period map...")
-            end
             CSV.write(joinpath(inpath, "inputs", input_stage_directory, PMap_Outfile),
                 PeriodMap)
 
             ### time_domain_reduction_settings.yml
-            if v
-                println("Writing .yml settings...")
-            end
             YAML.write_file(
                 joinpath(inpath, "inputs", input_stage_directory, YAML_Outfile),
                 myTDRsetup)
+
+            ### Market_data.csv
+            if MARKET_PRICES in keys(myinputs)
+                CSV.write(
+                    joinpath(inpath, "inputs", input_stage_directory, Market_Outfile), 
+                    MarketOutputData
+                )
+            end
         end
-    else
-        if v
-            println("Outputs: Single-Stage")
-        end
+
+    else # single stage
         mkpath(joinpath(inpath, TimeDomainReductionFolder))
 
         ### TDR_Results/Demand_data.csv
@@ -1539,9 +1624,6 @@ function cluster_inputs(inpath,
         end
         demand_in = demand_in[1:size(DMOutputData, 1), :]
 
-        if v
-            println("Writing demand file...")
-        end
         CSV.write(joinpath(inpath, Demand_Outfile), demand_in)
 
         ### TDR_Results/Generators_variability.csv
@@ -1553,9 +1635,6 @@ function cluster_inputs(inpath,
         GVOutputData = GVOutputData[!, Symbol.(RESOURCE_ZONES)]
         insertcols!(GVOutputData, 1, :Time_Index => 1:size(GVOutputData, 1))
         NewGVColNames = [GVColMap[string(c)] for c in names(GVOutputData)]
-        if v
-            println("Writing resource file...")
-        end
         CSV.write(joinpath(inpath, GVar_Outfile), GVOutputData, header = NewGVColNames)
 
         # Break up VRE-storage components if needed
@@ -1623,6 +1702,8 @@ function cluster_inputs(inpath,
             println("Writing .yml settings...")
         end
         YAML.write_file(joinpath(inpath, YAML_Outfile), myTDRsetup)
+
+        CSV.write(joinpath(inpath, Market_Outfile), MarketOutputData)
     end
 
     return Dict("OutputDF" => FinalOutputData,

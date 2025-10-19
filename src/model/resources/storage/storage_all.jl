@@ -33,7 +33,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     # Energy withdrawn from grid by resource "y" at hour "t" [MWh] on zone "z"
     @variable(EP, vCHARGE[y in STOR_ALL, t = 1:T]>=0)
 
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # Virtual discharge contributing to capacity reserves at timestep t for storage cluster y
         @variable(EP, vCAPRES_discharge[y in STOR_ALL, t = 1:T]>=0)
 
@@ -49,24 +49,30 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     # Energy losses related to technologies (increase in effective demand)
     @expression(EP,
         eELOSS[y in STOR_ALL],
-        sum(inputs["omega"][t] * EP[:vCHARGE][y, t]
-        for t in 1:T)-sum(inputs["omega"][t] *
-                          EP[:vP][y, t]
-        for t in 1:T))
+        sum(
+            inputs["omega"][t] * EP[:vCHARGE][y, t]
+            for t in 1:T
+        ) - 
+        sum(
+            inputs["omega"][t] * EP[:vP][y, t]
+            for t in 1:T
+        )
+    )
 
     ## Objective Function Expressions ##
 
     #Variable costs of "charging" for technologies "y" during hour "t" in zone "z"
     @expression(EP,
         eCVar_in[y in STOR_ALL, t = 1:T],
-        inputs["omega"][t]*var_om_cost_per_mwh_in(gen[y])*vCHARGE[y, t])
+        inputs["omega"][t] * var_om_cost_per_mwh_in(gen[y]) * vCHARGE[y, t]
+    )
 
     # Sum individual resource contributions to variable charging costs to get total variable charging costs
     @expression(EP, eTotalCVarInT[t = 1:T], sum(eCVar_in[y, t] for y in STOR_ALL))
     @expression(EP, eTotalCVarIn, sum(eTotalCVarInT[t] for t in 1:T))
     add_to_expression!(EP[:eObj], eTotalCVarIn)
 
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         #Variable costs of "virtual charging" for technologies "y" during hour "t" in zone "z"
         @expression(EP,
             eCVar_in_virtual[y in STOR_ALL, t = 1:T],
@@ -93,7 +99,8 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     # Term to represent net dispatch from storage in any period
     @expression(EP, ePowerBalanceStor[t = 1:T, z = 1:Z],
         sum(EP[:vP][y, t] - EP[:vCHARGE][y, t]
-        for y in intersect(resources_in_zone_by_rid(gen, z), STOR_ALL)))
+        for y in intersect(resources_in_zone_by_rid(gen, z), STOR_ALL))
+    )
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceStor)
 
     ### Constraints ###
@@ -109,13 +116,12 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     end
     @constraint(EP,
         cSoCBalStart[t in START_SUBPERIODS, y in CONSTRAINTSET],
-        EP[:vS][y,
-            t]==
+        EP[:vS][y, t] ==
         EP[:vS][y, t + hours_per_subperiod - 1] -
-        (1 / efficiency_down(gen[y]) * EP[:vP][y, t])
-        +
-        (efficiency_up(gen[y]) * EP[:vCHARGE][y, t]) -
-        (self_discharge(gen[y]) * EP[:vS][y, t + hours_per_subperiod - 1]))
+        1 / efficiency_down(gen[y]) * EP[:vP][y, t] +
+        efficiency_up(gen[y]) * EP[:vCHARGE][y, t] -
+        self_discharge(gen[y]) * EP[:vS][y, t + hours_per_subperiod - 1]
+    )
 
     @constraints(EP,
         begin
@@ -126,8 +132,8 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
             cSoCBalInterior[t in INTERIOR_SUBPERIODS, y in STOR_ALL],
             EP[:vS][y, t] ==
             EP[:vS][y, t - 1] - (1 / efficiency_down(gen[y]) * EP[:vP][y, t]) +
-            (efficiency_up(gen[y]) * EP[:vCHARGE][y, t]) -
-            (self_discharge(gen[y]) * EP[:vS][y, t - 1])
+            efficiency_up(gen[y]) * EP[:vCHARGE][y, t] -
+            self_discharge(gen[y]) * EP[:vS][y, t - 1]
         end)
 
     # Hourly matching constraints
@@ -143,7 +149,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     if OperationalReserves == 1
         storage_all_operational_reserves!(EP, inputs, setup)
     else
-        if CapacityReserveMargin > 0
+        if CapacityReserveMargin == 1
             # Note: maximum charge rate is also constrained by maximum charge power capacity, but as this differs by storage type,
             # this constraint is set in functions below for each storage type
 
@@ -177,7 +183,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:eELOSSByZone], expr)
 
     # Capacity Reserve Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # Constraints governing energy held in reserve when storage makes virtual capacity reserve margin contributions:
 
         # Links energy held in reserve in first time step with decisions in last time step of each subperiod

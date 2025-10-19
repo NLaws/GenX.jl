@@ -70,7 +70,7 @@ function non_served_energy!(EP::Model, inputs::Dict, setup::Dict)
     # Cost of non-served energy/curtailed demand at hour "t" in zone "z"
     @expression(EP,
         eCNSE[s = 1:SEG, t = 1:T, z = 1:Z],
-        (inputs["omega"][t]*inputs["pC_D_Curtail"][s]*vNSE[s, t, z]))
+        (inputs["omega"][t] * inputs["pC_D_Curtail"][s] * vNSE[s, t, z]))
 
     # Sum individual demand segment contributions to non-served energy costs to get total non-served energy costs
     # Julia is fastest when summing over one row one column at a time
@@ -88,25 +88,26 @@ function non_served_energy!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceNse)
 
     # Capacity Reserves Margin policy
-    if setup["CapacityReserveMargin"] > 0
-        if SEG >= 2
-            @expression(EP,
-                eCapResMarBalanceNSE[res = 1:inputs["NCapacityReserveMargin"], t = 1:T],
-                sum(EP[:vNSE][s, t, z]
-                for s in 2:SEG, z in findall(x -> x != 0, inputs["dfCapRes"][:, res])))
-            add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceNSE)
-        end
+    if setup["CapacityReserveMargin"] == 1 && SEG >= 2
+        @expression(EP,
+            eCapResMarBalanceNSE[res = 1:inputs["NCapacityReserveMargin"], t = 1:T],
+            sum(EP[:vNSE][s, t, z]
+            for s in 2:SEG, z in findall(x -> x != 0, inputs["dfCapRes"][:, res]))
+        )
+        add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceNSE)
     end
 
-    ### Constratints ###
+    ### Constraints ###
 
-    # Demand curtailed in each segment of curtailable demands cannot exceed maximum allowable share of demand
+    # Demand curtailed in each segment of curtailable demand cannot exceed maximum allowable share of demand
     @constraint(EP,
         cNSEPerSeg[s = 1:SEG, t = 1:T, z = 1:Z],
-        vNSE[s, t, z]<=inputs["pMax_D_Curtail"][s] * inputs["pD"][t, z])
+        vNSE[s, t, z] <= inputs["pMax_D_Curtail"][s] * inputs["pD"][t, z]
+    )
 
     # Total demand curtailed in each time step (hourly) cannot exceed total demand
     @constraint(EP,
         cMaxNSE[t = 1:T, z = 1:Z],
-        sum(vNSE[s, t, z] for s in 1:SEG)<=inputs["pD"][t, z])
+        sum(vNSE[s, t, z] for s in 1:SEG) <= inputs["pD"][t, z]
+    )
 end

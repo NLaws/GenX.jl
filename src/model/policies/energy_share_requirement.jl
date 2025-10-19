@@ -1,3 +1,21 @@
+"""
+    get_nuclear_technologies(inputs::Dict)::Vector{Int}
+
+Get the indices of any resources that have "nuclear" in the `technology` field.
+"""
+function get_nuclear_technologies(inputs::Dict)::Vector{Int}
+    ids = Int[]
+    for r in inputs["RESOURCES"]
+        if haskey(r, :technology)  # should be hasfield :/
+            if occursin("nuclear", lowercase(r.technology))
+                push!(ids, r.id)
+            end
+        end
+    end
+    return ids
+end
+
+
 @doc raw"""
 	energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
 This function establishes constraints that can be flexibily applied to define alternative forms of policies that require generation of a minimum quantity of megawatt-hours from a set of qualifying resources, such as renewable portfolio standard (RPS) or clean electricity standard (CES) policies prevalent in different jurisdictions.
@@ -25,22 +43,70 @@ However, with 100% RPS or CES policies enacted in several jurisdictions, policy 
 """
 function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
     println("Energy Share Requirement Policies Module")
+    gen = inputs["RESOURCES"]
+    T = inputs["T"]     # Number of time steps
+
+    create_empty_expression!(EP, :eESR, inputs["nESR"])
+    ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
+    @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR] >= 0)
+
+    # esr(gen[y], tag = ESR) is the value in Resource_energy_share_requirement.csv
+
+    @expression(EP, eESRgeneration[ESR = 1:inputs["nESR"]],
+        sum(
+            inputs["omega"][t] * esr(gen[y], tag = ESR) * EP[:vP][y, t]
+            for y in ids_with_policy(gen, esr, tag = ESR), t in 1:T
+        )
+    )
+    @expression(EP, eESRload[ESR = 1:inputs["nESR"]],
+        sum(
+            inputs["dfESR"][z, ESR] * inputs["omega"][t] * inputs["pD"][t, z]
+            for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
+        )
+    )
+    # TODO the add_similar_to_expression! is not working for the ESR constraint (it does not resolve
+    # to >= 0). For now fixing the issue with a constraint in the dfESR_slack block below.
+    add_similar_to_expression!(EP[:eESR], eESRgeneration - eESRload)
+
+    if setup["ESRExcludeNuclearTechnologyGeneration"] == 1
+        nukes = get_nuclear_technologies(inputs)
+        if length(nukes) > 0
+            @expression(EP, eESRnoNukes[ESR = 1:inputs["nESR"]],
+                sum(
+                    inputs["dfESR"][z, ESR] * inputs["omega"][t] * 
+                    sum(EP[:vP][y, t] for y in intersect(nukes, resources_in_zone_by_rid(gen, z)))
+                    for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
+                )
+            )
+            add_similar_to_expression!(EP[:eESR], -1 * eESRnoNukes)
+        end
+    end
 
     # if input files are present, add energy share requirement slack variables
     if haskey(inputs, "dfESR_slack")
-        @variable(EP, vESR_slack[ESR = 1:inputs["nESR"]]>=0)
+        @variable(EP, vESR_slack[ESR = 1:inputs["nESR"]] >= 0)
         add_similar_to_expression!(EP[:eESR], vESR_slack)
+
 
         @expression(EP,
             eCESRSlack[ESR = 1:inputs["nESR"]],
-            inputs["dfESR_slack"][ESR, :PriceCap]*EP[:vESR_slack][ESR])
+            inputs["dfESR_slack"][ESR, :PriceCap] * EP[:vESR_slack][ESR]
+        )
         @expression(EP,
             eCTotalESRSlack,
-            sum(EP[:eCESRSlack][ESR] for ESR in 1:inputs["nESR"]))
+            sum(EP[:eCESRSlack][ESR] for ESR in 1:inputs["nESR"])
+        )
 
         add_to_expression!(EP[:eObj], eCTotalESRSlack)
     end
 
-    ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
-    @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR]>=0)
+    if !haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, eESRgeneration - eESRload >= 0)
+
+    elseif haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
+        
+    elseif haskey(inputs, "dfESR_slack") && setup["ESRExcludeNuclearTechnologyGeneration"] == 1
+        @constraint(EP, eESRgeneration - eESRload + eESRnoNukes + vESR_slack >= 0)
+    end
 end

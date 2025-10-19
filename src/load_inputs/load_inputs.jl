@@ -38,7 +38,7 @@ function load_inputs(setup::Dict, path::AbstractString)
 
     validatetimebasis(inputs)
 
-    if setup["CapacityReserveMargin"] == 1
+    if setup["CapacityReserveMargin"] > 0
         load_cap_reserve_margin!(setup, policies_path, inputs)
         if inputs["Z"] > 1
             load_cap_reserve_margin_trans!(setup, inputs, network_var)
@@ -73,6 +73,10 @@ function load_inputs(setup::Dict, path::AbstractString)
     # Read in hydrogen damand data
     if setup["HydrogenMinimumProduction"] == 1
         load_hydrogen_demand!(setup, policies_path, inputs)
+    end
+
+    if setup["Market"] == 1
+        load_market_data!(setup, path, inputs)
     end
 
     # Read in mapping of modeled periods to representative periods

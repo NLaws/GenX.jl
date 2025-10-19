@@ -2,13 +2,16 @@ function get_settings_path(case::AbstractString)
     return joinpath(case, "settings")
 end
 
+
 function get_settings_path(case::AbstractString, filename::AbstractString)
     return joinpath(get_settings_path(case), filename)
 end
 
+
 function get_default_output_folder(case::AbstractString)
     return joinpath(case, "results")
 end
+
 
 @doc raw"""
     run_genx_case!(case::AbstractString, optimizer::Any=HiGHS.Optimizer)
@@ -41,12 +44,14 @@ function run_genx_case!(case::AbstractString, optimizer::Any = HiGHS.Optimizer)
     end
 end
 
+
 function time_domain_reduced_files_exist(tdrpath)
     tdr_demand = file_exists(tdrpath, ["Demand_data.csv", "Load_data.csv"])
     tdr_genvar = isfile(joinpath(tdrpath, "Generators_variability.csv"))
     tdr_fuels = isfile(joinpath(tdrpath, "Fuels_data.csv"))
     return (tdr_demand && tdr_genvar && tdr_fuels)
 end
+
 
 function run_genx_case_simple!(case::AbstractString, mysetup::Dict, optimizer::Any)
     settings_path = get_settings_path(case)
@@ -106,6 +111,7 @@ function run_genx_case_simple!(case::AbstractString, mysetup::Dict, optimizer::A
     end
 end
 
+
 function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimizer::Any)
     settings_path = get_settings_path(case)
     multistage_settings = get_settings_path(case, "multi_stage_settings.yml") # Multi stage settings YAML file path
@@ -121,6 +127,7 @@ function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimize
         TDRpath = joinpath(first_stage_path, mysetup["TimeDomainReductionFolder"])
         system_path = joinpath(first_stage_path, mysetup["SystemFolder"])
         prevent_doubled_timedomainreduction(system_path)
+        
         if !time_domain_reduced_files_exist(TDRpath)
             if (mysetup["MultiStage"] == 1) &&
                (TDRSettingsDict["MultiStageConcatenate"] == 0)
@@ -167,8 +174,7 @@ function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimize
     validate_can_retire_multistage(
         inputs_dict, mysetup["MultiStageSettingsDict"]["NumStages"])
 
-    ### Solve model
-    println("Solving Model")
+
 
     # Prepare folder for results    
     outpath = get_default_output_folder(case)
@@ -185,9 +191,16 @@ function run_genx_case_multistage!(case::AbstractString, mysetup::Dict, optimize
         mkdir(outpath)
     end
 
-    # Step 3) Run DDP Algorithm
-    ## Solve Model
-    model_dict, mystats_d, inputs_dict = run_ddp(outpath, model_dict, mysetup, inputs_dict)
+    ### Solve model
+    println("Solving Model")
+
+    # Step 3) Run DDP Algorithm or Myopic single pass
+    if mysetup["MultiStageSettingsDict"]["Myopic"] == 1
+        mystats_d = Dict()  # mystats_d is for DDP iteration metadata
+        model_dict, inputs_dict = run_myopic_multistage(outpath, model_dict, mysetup, inputs_dict)
+    else
+        model_dict, mystats_d, inputs_dict = run_ddp(outpath, model_dict, mysetup, inputs_dict)
+    end
 
     # Step 4) Write final outputs from each stage
     if mysetup["MultiStageSettingsDict"]["Myopic"] == 0 ||

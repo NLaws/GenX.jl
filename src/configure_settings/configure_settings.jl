@@ -1,5 +1,6 @@
 function default_settings()
-    Dict{Any, Any}("PrintModel" => 0,
+    Dict{Any, Any}(
+        "PrintModel" => 0,
         "OverwriteResults" => 0,
         "NetworkExpansion" => 0,
         "Trans_Loss_Segments" => 1,
@@ -37,7 +38,11 @@ function default_settings()
         "ResourcePoliciesFolder" => "policy_assignments",
         "SystemFolder" => "system",
         "PoliciesFolder" => "policies",
-        "ObjScale" => 1)
+        "ObjScale" => 1,
+        "Market" => 0,
+        "ESRExcludeNuclearTechnologyGeneration" => 0,
+        "LimitNG_To40CF" => 0,
+    )
 end
 
 @doc raw"""
@@ -97,7 +102,9 @@ function validate_settings!(settings::Dict{Any, Any})
 end
 
 function default_writeoutput()
-    Dict{String, Bool}("WriteCosts" => true,
+    Dict{String, Bool}(
+        "WriteAngles" => true,
+        "WriteCosts" => true,
         "WriteCapacity" => true,
         "WriteCapacityValue" => true,
         "WriteCapacityFactor" => true,
@@ -115,6 +122,7 @@ function default_writeoutput()
         "WriteFusion" => true,
         "WriteHourlyMatchingPrices" => true,
         "WriteHydrogenPrices" => true,
+        "WriteMarketResults" => true,
         "WriteMaintenance" => true,
         "WriteMaxCapReq" => true,
         "WriteMinCapReq" => true,
@@ -144,7 +152,7 @@ function default_writeoutput()
         "WriteTransmissionLosses" => true,
         "WriteVirtualDischarge" => true,
         "WriteVREStor" => true,
-        "WriteAngles" => true)
+    )
 end
 
 function configure_writeoutput(output_settings_path::String, settings::Dict)
