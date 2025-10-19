@@ -292,6 +292,31 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
         println(elapsed_time)
     end
 
+    dfESRRev = DataFrame()
+    if setup["EnergyShareRequirement"] == 1 && has_duals(EP)
+        dfESR = DataFrame()
+        if output_settings_d["WriteESRPrices"] ||
+           output_settings_d["WriteESRRevenue"] || output_settings_d["WriteNetRevenue"]
+            elapsed_time_esr_prices = @elapsed dfESR = write_esr_prices(path,
+                inputs,
+                setup,
+                EP)
+            println("Time elapsed for writing esr prices is")
+            println(elapsed_time_esr_prices)
+        end
+
+        if output_settings_d["WriteESRRevenue"] || output_settings_d["WriteNetRevenue"]
+            elapsed_time_esr_revenue = @elapsed dfESRRev = write_esr_revenue(path,
+                inputs,
+                setup,
+                dfPower,
+                dfESR,
+                EP)
+            println("Time elapsed for writing esr revenue is")
+            println(elapsed_time_esr_revenue)
+        end
+    end
+
     if setup["MultiStage"] == 0
         dfEnergyRevenue = DataFrame()
         dfChargingcost = DataFrame()
@@ -330,31 +355,6 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                     EP)
                 println("Time elapsed for writing subsidy is")
                 println(elapsed_time_subsidy)
-            end
-        end
-
-        dfESRRev = DataFrame()
-        if setup["EnergyShareRequirement"] == 1 && has_duals(EP)
-            dfESR = DataFrame()
-            if output_settings_d["WriteESRPrices"] ||
-               output_settings_d["WriteESRRevenue"] || output_settings_d["WriteNetRevenue"]
-                elapsed_time_esr_prices = @elapsed dfESR = write_esr_prices(path,
-                    inputs,
-                    setup,
-                    EP)
-                println("Time elapsed for writing esr prices is")
-                println(elapsed_time_esr_prices)
-            end
-
-            if output_settings_d["WriteESRRevenue"] || output_settings_d["WriteNetRevenue"]
-                elapsed_time_esr_revenue = @elapsed dfESRRev = write_esr_revenue(path,
-                    inputs,
-                    setup,
-                    dfPower,
-                    dfESR,
-                    EP)
-                println("Time elapsed for writing esr revenue is")
-                println(elapsed_time_esr_revenue)
             end
         end
 
