@@ -11,9 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   multiple price tiers) see https://github.com/NLaws/GenX.jl/pull/7 for more.
   - implemented `TimeDomainReduction: 1` for `Market: 1` single stage and multistage models with
     `MultiStageConcatenate: 0`
+- add a capacity market model via "Capacity_market.csv" that is accounted for in the capacity
+  reserve constraint.
 -  genx_settings.yml option `CapacityReserveMargin: 2` for applying capacity the capacity reserve
    constraint only at the peak load for all resources.
+  - allow for a Capacity_reserve_peak_load.csv that uses the peak load provided for the capacity
+    reserve requirement constraint when `CapacityReserveMargin: 2`. We used this input to apply the
+    capacity reserve margin the peak load forecasted three years into the future in each stage.
+  - allow for a "Capacity_requirements.csv" that if exists use the value in it for the capacity 
+    reserve constraint (overrides Capacity_reserve_peak_load.csv - we should remove one of these.)
 - consolidated ESR definitions into one place
+- add ESRExcludeNuclearTechnologyGeneration option that when 1 subtracts nuclear generation from the 
+  demand before multiplying by the ESR ratio
 
 ## Unreleased
 
