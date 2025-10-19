@@ -27,6 +27,13 @@ function load_cap_reserve_margin!(setup::Dict, path::AbstractString, inputs::Dic
         inputs["ring_fenced_generators"] = load_dataframe(fpath)[!, "firm_capacity"][1] / scale_factor
         println(filename * " Successfully Read!")
     end
+
+    filename = "Capacity_reserve_peak_load.csv"
+    fpath = joinpath(path, filename)
+    if isfile(fpath)
+        inputs["capacity_reserve_peak_load"] = load_dataframe(fpath)[!, "peak_load"][1] / scale_factor
+        println(filename * " Successfully Read!")
+    end
 end
 
 @doc raw"""
