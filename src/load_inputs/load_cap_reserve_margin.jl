@@ -45,6 +45,14 @@ function load_cap_reserve_margin!(setup::Dict, path::AbstractString, inputs::Dic
         )
         println(filename * " Successfully Read!")
     end
+
+    filename = "Capacity_requirements.csv"
+    fpath = joinpath(path, filename)
+    if isfile(fpath)
+        df = load_dataframe(fpath)
+        inputs["required_capacity"] = df[!, "required_capacity"][1] / scale_factor
+        println(filename * " Successfully Read!")
+    end
 end
 
 @doc raw"""

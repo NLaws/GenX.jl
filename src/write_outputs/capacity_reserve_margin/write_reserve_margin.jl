@@ -17,13 +17,17 @@ function write_cap_reserve_2(path::AbstractString, inputs::Dict, setup::Dict, EP
         max_demand_by_zone = fill(inputs["capacity_reserve_peak_load"], size(max_demand_by_zone)...)
     end
     # RHS is the minimum value of the capacity reserve
-    RHS = [
-        sum(
-            max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
-            for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])
-        )
-        for res=1:NCRM
-    ]
+    if haskey(inputs, "required_capacity")
+        RHS = inputs["required_capacity"]
+    else
+        RHS = [
+            sum(
+                max_demand_by_zone[z] * (1 + inputs["dfCapRes"][z, res])
+                for z in findall(x -> x != 0, inputs["dfCapRes"][:, res])
+            )
+            for res=1:NCRM
+        ]
+    end
 
     default = repeat([0.0], length(RHS))
 
@@ -43,7 +47,7 @@ function write_cap_reserve_2(path::AbstractString, inputs::Dict, setup::Dict, EP
         ring_fenced_contribution = ring_fenced_contribution,
         required_reserve = RHS,
         installed_reserve = vec(value.(EP[:eCapResMarBalance])) + ring_fenced_contribution,
-        peak_demand_used_in_constraint = vec(max_demand_by_zone),
+        peak_demand = vec(max_demand_by_zone),
     )
     df .= round.(df, digits=3)
 
