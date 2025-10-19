@@ -286,6 +286,12 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
         println(elapsed_time)
     end
 
+    if setup["CapacityReserveMargin"] == 2
+        elapsed_time = @elapsed write_cap_reserve_2(path, inputs, setup, EP)
+        println("Time elapsed for cap. reserve results is")
+        println(elapsed_time)
+    end
+
     if setup["MultiStage"] == 0
         dfEnergyRevenue = DataFrame()
         dfChargingcost = DataFrame()
@@ -353,7 +359,7 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
         end
 
         dfResRevenue = DataFrame()
-        if setup["CapacityReserveMargin"] == 1 && has_duals(EP)
+        if setup["CapacityReserveMargin"] > 0 && has_duals(EP)
             if output_settings_d["WriteReserveMargin"]
                 elapsed_time_reserve_margin = @elapsed write_reserve_margin(path, setup, EP)
                 println("Time elapsed for writing reserve margin is")
@@ -369,7 +375,7 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                 println(elapsed_time_rsv_margin_w)
             end
 
-            if output_settings_d["WriteVirtualDischarge"]
+            if output_settings_d["WriteVirtualDischarge"] && setup["CapacityReserveMargin"] == 1
                 elapsed_time_virtual_discharge = @elapsed write_virtual_discharge(path,
                     inputs,
                     setup,
@@ -378,8 +384,8 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                 println(elapsed_time_virtual_discharge)
             end
 
-            if output_settings_d["WriteReserveMarginRevenue"] ||
-               output_settings_d["WriteNetRevenue"]
+            if setup["CapacityReserveMargin"] == 1 && 
+                (output_settings_d["WriteReserveMarginRevenue"] || output_settings_d["WriteNetRevenue"])
                 elapsed_time_res_rev = @elapsed dfResRevenue = write_reserve_margin_revenue(
                     path,
                     inputs,
@@ -399,7 +405,7 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                 println(elapsed_time_rsv_slack)
             end
 
-            if output_settings_d["WriteCapacityValue"]
+            if output_settings_d["WriteCapacityValue"] && setup["CapacityReserveMargin"] == 1
                 elapsed_time_cap_value = @elapsed write_capacity_value(path,
                     inputs,
                     setup,
