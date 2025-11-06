@@ -28,6 +28,10 @@ function compute_overnight_capital_cost(settings_d::Dict,
 
     # Check for resources with non-zero investment costs and a Capital_Recovery_Period value of 0 years
     if any((crp .== 0) .& (inv_costs_yr .> 0))
+            bad_idxs = findall((crp .== 0) .& (inv_costs_yr .> 0))
+            println("⚠️  Resources with nonzero investment cost and CRP = 0 found at indices: ", bad_idxs)
+            println("   Corresponding inv_costs_yr values: ", inv_costs_yr[bad_idxs])
+            println("   Corresponding crp values: ", crp[bad_idxs])
         msg = "You have some resources with non-zero investment costs and a Capital_Recovery_Period value of 0 years.\n" *
               "These resources will have a calculated overnight capital cost of \$0. Correct your inputs if this is a mistake.\n"
         error(msg)
