@@ -28,12 +28,17 @@ function compute_overnight_capital_cost(settings_d::Dict,
 
     # Check for resources with non-zero investment costs and a Capital_Recovery_Period value of 0 years
     if any((crp .== 0) .& (inv_costs_yr .> 0))
-            @show findall((crp .== 0) .& (inv_costs_yr .> 0)) inv_costs_yr crp
-            println(keys(settings_d))
-        msg = "You have some resources with non-zero investment costs and a Capital_Recovery_Period value of 0 years.\n" *
-              "These resources will have a calculated overnight capital cost of \$0. Correct your inputs if this is a mistake.\n"
-        error(msg)
+        bad_idxs = findall((crp .== 0) .& (inv_costs_yr .> 0))
+        crp[bad_idxs] .= 30  # assign CRP = 30 for these resources
+
+        msg = "⚠️ Warning: Some resources had non-zero investment costs but a Capital_Recovery_Period of 0.\n" *
+            "These CRP values have been automatically set to 30 years. Check your inputs if this is not intended."
+        @warn msg
+
+        # Optional: print which ones were modified
+        println("Adjusted CRP to 30 for resources at indices: ", bad_idxs)
     end
+
 
     cur_stage = settings_d["CurStage"] # Current model
     num_stages = settings_d["NumStages"] # Total number of model stages
