@@ -46,9 +46,6 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
     gen = inputs["RESOURCES"]
     T = inputs["T"]     # Number of time steps
 
-    ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
-    @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR] >= 0)
-
     # esr(gen[y], tag = ESR) is the value in Resource_energy_share_requirement.csv
 
     @expression(EP, eESRgeneration[ESR = 1:inputs["nESR"]],
@@ -63,8 +60,6 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
             for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
         )
     )
-    # TODO the add_similar_to_expression! is not working for the ESR constraint (it does not resolve
-    # to >= 0). For now fixing the issue with a constraint in the dfESR_slack block below.
     add_similar_to_expression!(EP[:eESR], eESRgeneration - eESRload)
 
     if setup["ESRExcludeNuclearTechnologyGeneration"] == 1
@@ -77,7 +72,7 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
                     for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
                 )
             )
-            add_similar_to_expression!(EP[:eESR], -1 * eESRnoNukes)
+            add_similar_to_expression!(EP[:eESR], eESRnoNukes)
         end
     end
 
@@ -99,13 +94,6 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
         add_to_expression!(EP[:eObj], eCTotalESRSlack)
     end
 
-    if !haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
-        @constraint(EP, eESRgeneration - eESRload >= 0)
-
-    elseif haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
-        @constraint(EP, eESRgeneration - eESRload + vESR_slack >= 0)
-        
-    elseif haskey(inputs, "dfESR_slack") && setup["ESRExcludeNuclearTechnologyGeneration"] == 1
-        @constraint(EP, eESRgeneration - eESRload + eESRnoNukes + vESR_slack >= 0)
-    end
+    ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
+    @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR] >= 0)
 end
