@@ -110,10 +110,10 @@ function hydro_res!(EP::Model, inputs::Dict, setup::Dict)
         sum(EP[:vP][y, t] for y in HYDRO_RES_BY_ZONE[z]))
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceHydroRes)
 
+    capresfactor = inputs["DERATING_FACTOR"]
     # Capacity Reserves Margin policy
     if setup["CapacityReserveMargin"] == 1
         nCRMZones = inputs["NCapacityReserveMargin"]
-        capresfactor = inputs["DERATING_FACTOR"]
         @expression(EP,
             eCapResMarBalanceHydro[res = 1:nCRMZones, t = 1:T],
             sum(capresfactor[y, res] * EP[:vP][y, t] for y in HYDRO_RES))
