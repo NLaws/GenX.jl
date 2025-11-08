@@ -125,6 +125,7 @@ function hydro_res!(EP::Model, inputs::Dict, setup::Dict)
                 capresfactor[y, res] * EP[:eTotalCap][y]  for y in HYDRO_RES
             )
         )
+        add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceHydro)
     end
 
     ### Constratints ###

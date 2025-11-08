@@ -60,6 +60,7 @@ function curtailable_variable_renewable!(EP::Model, inputs::Dict, setup::Dict)
                 for y in VRE
             )
         )
+        add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceVRE)
     end
 
     ### Constraints ###

@@ -20,8 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     capacity reserve margin the peak load forecasted three years into the future in each stage.
   - allow for a "Capacity_requirements.csv" that if exists use the value in it for the capacity 
     reserve constraint (overrides Capacity_reserve_peak_load.csv - we should remove one of these.)
-- consolidated ESR definitions into one place
-- add ESRExcludeNuclearTechnologyGeneration option that when 1 subtracts nuclear generation from the 
+- add `ESRExcludeNuclearTechnologyGeneration` option that when 1 subtracts nuclear generation from the 
   demand before multiplying by the ESR ratio
 
 ## Unreleased
