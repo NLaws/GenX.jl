@@ -34,16 +34,18 @@ function must_run!(EP::Model, inputs::Dict, setup::Dict)
         sum(EP[:vP][y, t] for y in MUST_RUN_BY_ZONE[z]))
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceNdisp)
 
-    capresfactor = inputs["DERATING_FACTOR"]
     # Capacity Reserves Margin policy
     if CapacityReserveMargin == 1
+        capresfactor = inputs["DERATING_FACTOR"]
         nCRMZones = inputs["NCapacityReserveMargin"]
         @expression(EP,
             eCapResMarBalanceMustRun[res = 1:nCRMZones, t = 1:T],
             sum(capresfactor[y, res] * EP[:eTotalCap][y] *
                 inputs["pP_Max"][y, t] for y in MUST_RUN))
         add_similar_to_expression!(EP[:eCapResMarBalance], eCapResMarBalanceMustRun)
+
     elseif CapacityReserveMargin == 2
+        capresfactor = inputs["DERATING_FACTOR"]
         @expression(EP,
             eCapResMarBalanceMustRun[res = 1:inputs["NCapacityReserveMargin"], t = 1:1],
             sum(
