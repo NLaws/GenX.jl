@@ -252,6 +252,15 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
         maximum_capacity_requirement!(EP, inputs, setup)
     end
 
+    if setup["AnnualBuildLimits"] == 1
+        resources_with_annual_limits = [
+            y for y in inputs["RESOURCES"] if y.resource in keys(inputs["AnnualBuildLimits"])
+        ]
+        @constraint(EP, [r in resources_with_annual_limits],
+            EP[:vCAP][r.id] <= inputs["AnnualBuildLimits"][r.resource]
+        )
+    end
+
     # Hydrogen demand limits
     if setup["HydrogenMinimumProduction"] > 0
         hydrogen_demand!(EP, inputs, setup)

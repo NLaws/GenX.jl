@@ -43,6 +43,7 @@ function default_settings()
         "Market" => 0,
         "ESRExcludeNuclearTechnologyGeneration" => 0,
         "LimitNG_To40CF" => 0,
+        "AnnualBuildLimits" => 0,
     )
 end
 
