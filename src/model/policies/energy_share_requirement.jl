@@ -72,7 +72,7 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
                     for t in 1:T, z in findall(x -> x > 0, inputs["dfESR"][:, ESR])
                 )
             )
-            add_similar_to_expression!(EP[:eESR], eESRnoNukes)
+            # add_similar_to_expression!(EP[:eESR], -1 * eESRnoNukes)
         end
     end
 
@@ -95,5 +95,13 @@ function energy_share_requirement!(EP::Model, inputs::Dict, setup::Dict)
     end
 
     ## Energy Share Requirements (minimum energy share from qualifying renewable resources) constraint
-    @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], EP[:eESR][ESR] >= 0)
+    if !haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], eESRgeneration[ESR] - eESRload[ESR] >= 0)
+
+    elseif haskey(inputs, "dfESR_slack") && !(setup["ESRExcludeNuclearTechnologyGeneration"] == 1)
+        @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], eESRgeneration[ESR] - eESRload[ESR] + vESR_slack[ESR] >= 0)
+        
+    elseif haskey(inputs, "dfESR_slack") && setup["ESRExcludeNuclearTechnologyGeneration"] == 1
+        @constraint(EP, cESRShare[ESR = 1:inputs["nESR"]], eESRgeneration[ESR] - eESRload[ESR] + eESRnoNukes[ESR] + vESR_slack[ESR] >= 0)
+    end
 end

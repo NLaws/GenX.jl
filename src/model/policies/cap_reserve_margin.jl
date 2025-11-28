@@ -107,6 +107,7 @@ function cap_reserve_margin!(EP::Model, inputs::Dict, setup::Dict)
 
         max_demand_by_zone = maximum(inputs["pD"], dims=1)
         if haskey(inputs, "capacity_reserve_peak_load")
+            # use user peak loads instead of actual peak. we use this to input the 3 year ahead load
             max_demand_by_zone = fill(inputs["capacity_reserve_peak_load"], size(max_demand_by_zone)...)
         end
 
